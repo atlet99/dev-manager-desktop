@@ -39,6 +39,7 @@ export class InfoComponent implements OnInit, OnDestroy {
     infoError: any;
     deviceSubscription!: Subscription;
     infoSubscription?: Subscription;
+    private devModeGeneration = 0;
 
     constructor(
         private modalService: NgbModal,
@@ -52,6 +53,8 @@ export class InfoComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         this.deviceSubscription = this.deviceManager.selected$.subscribe((selected) => {
+            this.devModeGeneration++;
+            this.infoSubscription?.unsubscribe();
             this.device = selected;
             this.deviceInfo = null;
             this.devModeInfo = null;
@@ -62,6 +65,7 @@ export class InfoComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy() {
+        this.devModeGeneration++;
         this.deviceSubscription.unsubscribe();
         this.infoSubscription?.unsubscribe();
     }
@@ -124,14 +128,17 @@ export class InfoComponent implements OnInit, OnDestroy {
     }
 
     private async loadDevModeInfo(device: Device): Promise<void> {
-        if (!device || device.username !== 'prisoner') {
+        if (this.device !== device) return;
+        const generation = ++this.devModeGeneration;
+        if (device.username !== 'prisoner') {
             this.devModeInfo = null;
             return;
         }
         try {
-            this.devModeInfo = await this.devMode.status(device);
+            const info = await this.devMode.status(device);
+            if (generation === this.devModeGeneration && this.device === device) this.devModeInfo = info;
         } catch (e) {
-            this.devModeInfo = null;
+            if (generation === this.devModeGeneration && this.device === device) this.devModeInfo = null;
         }
     }
 
