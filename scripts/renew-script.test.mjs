@@ -9,7 +9,7 @@ import ts from 'typescript';
 
 // Apply the actual TypeScript template's string escapes without another loader.
 const source = readFileSync(new URL('../src/app/info/renew-script/renew-script.sh.ts', import.meta.url), 'utf8');
-const {default: template, escapeShellValue} = await import(`data:text/javascript,${encodeURIComponent(ts.transpile(source))}`);
+const {default: template, escapeShellValue, renewCacheName} = await import(`data:text/javascript,${encodeURIComponent(ts.transpile(source))}`);
 
 describe('generated renewal script', {skip: process.platform === 'win32' ? 'Run in a POSIX shell (for example WSL)' : false}, () => {
     let root;
@@ -68,8 +68,10 @@ printf '%s\\n' "$TEST_CURL_BODY"
     afterEach(() => rmSync(root, {recursive: true, force: true}));
 
     function render(device = {}, keyContent = 'test-private-key') {
+        const name = device.name ?? 'living room';
         writeFileSync(script, Mustache.render(template, {
             device: {name: 'living room', host: 'tv.invalid', port: 9922, username: 'prisoner', passphrase: '', ...device},
+            cache: renewCacheName(name),
             keyContent,
         }, undefined, {escape: escapeShellValue}));
     }
@@ -154,6 +156,22 @@ printf '%s\\n' "$TEST_CURL_BODY"
         render({}, key);
         assertRenewed(run({TEST_EXPECT_KEY: key}));
         assert.equal(readdirSync(root).includes('injected'), false);
+    });
+
+    it('supports device names containing path separators and keeps their caches separate', () => {
+        render({name: 'room/tv'});
+        assertRenewed(run());
+        assertRenewed(run({TEST_SSH_TOKEN: ''}));
+        render({name: 'room%2Ftv'});
+        const result = run({TEST_SSH_TOKEN: ''});
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, /Unable to get token/);
+        writeFileSync(join(env.XDG_STATE_HOME, 'webos-dev-manager/webos_devmode_token_room%2Ftv.txt'), 'TestSessionToken123');
+        assertRenewed(run({TEST_SSH_TOKEN: ''}));
+        render({name: 'room/../../escape'});
+        assertRenewed(run());
+        assertRenewed(run({TEST_SSH_TOKEN: ''}));
+        assert.equal(readdirSync(env.XDG_STATE_HOME).includes('escape.txt'), false);
     });
 
     it('propagates curl transport timeout status', () => {

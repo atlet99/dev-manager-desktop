@@ -2,6 +2,10 @@ export function escapeShellValue(value: string): string {
     return String(value).replace(/'/g, "'\\''");
 }
 
+export function renewCacheName(name: string): {directory: string, name: string} {
+    return name.includes('/') ? {directory: '/encoded', name: encodeURIComponent(name)} : {directory: '', name};
+}
+
 // language=shell
 export default `#!/bin/sh
 
@@ -15,7 +19,8 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 1
 fi
 
-DEVICE_NAME='{{device.name}}'
+CACHE_SUBDIR='{{cache.directory}}'
+CACHE_NAME='{{cache.name}}'
 DEVICE_HOST='{{device.host}}'
 DEVICE_PORT='{{device.port}}'
 DEVICE_USERNAME='{{device.username}}'
@@ -43,7 +48,7 @@ fi
 trap 'rm -rf "\${TEMP_KEY_DIR}"' 0
 trap 'exit 1' HUP INT TERM
 
-PRIV_KEY_FILE="\${TEMP_KEY_DIR}/webos_privkey_\${DEVICE_NAME}"
+PRIV_KEY_FILE="\${TEMP_KEY_DIR}/webos_privkey"
 
 if ! printf '%s\\n' '{{keyContent}}' >"\${PRIV_KEY_FILE}"; then
     echo "Unable to write temporary SSH private key" >&2
@@ -80,8 +85,10 @@ case "$XDG_STATE_HOME" in
   *) STATE_HOME="\${HOME:+\${HOME}/.local/state}" ;;
 esac
 SESSION_TOKEN_CACHE=""
+CACHE_DIR=""
 if [ -n "$STATE_HOME" ]; then
-  SESSION_TOKEN_CACHE="$STATE_HOME/webos-dev-manager/webos_devmode_token_\${DEVICE_NAME}.txt"
+  CACHE_DIR="$STATE_HOME/webos-dev-manager$CACHE_SUBDIR"
+  SESSION_TOKEN_CACHE="$CACHE_DIR/webos_devmode_token_\${CACHE_NAME}.txt"
 fi
 
 if [ -z "$SESSION_TOKEN" ]; then
@@ -93,7 +100,7 @@ if [ -z "$SESSION_TOKEN" ]; then
         fi
     fi
 else
-    if [ -n "$SESSION_TOKEN_CACHE" ] && mkdir -p "$STATE_HOME/webos-dev-manager"; then
+    if [ -n "$SESSION_TOKEN_CACHE" ] && mkdir -p "$CACHE_DIR"; then
         if ! printf '%s\\n' "$SESSION_TOKEN" >"$SESSION_TOKEN_CACHE"; then
             echo "Unable to save token cache; continuing with token from TV" >&2
         fi
