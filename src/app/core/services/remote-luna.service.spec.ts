@@ -1,14 +1,55 @@
 import {NgZone} from '@angular/core';
 import {ReplaySubject} from 'rxjs';
 import {vi} from 'vitest';
-import {CommandData, CommandSubject} from './remote-command.service';
-import {LunaSubscription} from './remote-luna.service';
+import {CommandData, CommandSubject, RemoteCommandService} from './remote-command.service';
+import {LunaSubscription, RemoteLunaService} from './remote-luna.service';
+import {Device} from '../../types';
 
 function command() {
     const proc = new ReplaySubject<CommandData<string>>() as CommandSubject<string>;
     proc.write = vi.fn().mockResolvedValue(undefined);
     return proc;
 }
+
+describe('RemoteLunaService diagnostics', () => {
+    it('does not expose request and response data in logs or malformed-response errors', async () => {
+        const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const proc = command();
+        const commands = {
+            exec: vi.fn().mockResolvedValueOnce('{"returnValue":true,"token":"response-secret"}')
+                .mockResolvedValueOnce('malformed-secret'),
+            popen: vi.fn().mockResolvedValue(proc),
+        };
+        const service = new RemoteLunaService(commands as unknown as RemoteCommandService);
+        const device = {name: 'test'} as Device;
+        try {
+            await expect(service.call(device, 'luna://test', {token: 'request-secret'}))
+                .resolves.toMatchObject({token: 'response-secret'});
+            const error = await service.call(device, 'luna://test').catch(e => e);
+            expect(error.message).not.toContain('malformed-secret');
+            const subscription = await service.subscribe(device, 'luna://test', {token: 'subscribe-secret'});
+            proc.next({fd: 0, data: '{"token":"stream-secret"}'});
+            proc.complete();
+            await subscription.unsubscribe();
+            const badProc = command();
+            const badSubscription = new LunaSubscription(badProc, 'bad-test');
+            let streamError: Error | undefined;
+            badSubscription.asObservable().subscribe({error: error => streamError = error});
+            badProc.next({fd: 0, data: 'malformed-stream-secret'});
+            expect(streamError?.message).toBe('Bad response from Luna');
+            badProc.complete();
+            await badSubscription.unsubscribe();
+            const logs = JSON.stringify([...debug.mock.calls, ...warn.mock.calls]);
+            for (const secret of ['request-secret', 'response-secret', 'malformed-secret', 'subscribe-secret', 'stream-secret', 'malformed-stream-secret']) {
+                expect(logs).not.toContain(secret);
+            }
+        } finally {
+            debug.mockRestore();
+            warn.mockRestore();
+        }
+    });
+});
 
 describe('LunaSubscription disposal', () => {
     beforeEach(() => vi.useFakeTimers());

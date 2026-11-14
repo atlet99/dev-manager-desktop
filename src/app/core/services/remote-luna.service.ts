@@ -28,7 +28,7 @@ export class RemoteLunaService {
                                        falseAsError: boolean = true): Promise<T> {
         const sendCmd = pub ? 'luna-send-pub' : 'luna-send';
         const nonce = self.crypto.randomUUID();
-        console.debug('remote-luna call', nonce, 'send', uri, param);
+        console.debug('remote-luna call', nonce, 'send', uri);
         return this.commands.exec(device, `${sendCmd} -n 1 ${uri} ${escapeSingleQuoteString(JSON.stringify(param))}`, 'utf-8')
             .catch(e => {
                 if (ExecutionError.isCompatible(e) && e.status == 127) {
@@ -41,10 +41,10 @@ export class RemoteLunaService {
                 try {
                     typed = JSON.parse(out.trim());
                 } catch (e) {
-                    console.warn('remote-luna call', nonce, 'invalid response: ', out);
-                    throw new Error(`Bad response ${out}`);
+                    console.warn('remote-luna call', nonce, 'invalid response');
+                    throw new Error('Bad response from Luna');
                 }
-                console.debug('remote-luna call', nonce, 'response', typed);
+                console.debug('remote-luna call', nonce, 'response received');
                 if (typed.returnValue === false) {
                     const errorText: string | undefined = typed['errorText'];
                     if (errorText?.startsWith('Unknown method')) {
@@ -67,7 +67,7 @@ export class RemoteLunaService {
         const command = `${sendCmd} -i ${uri} ${escapeSingleQuoteString(JSON.stringify(param))}`;
         const nonce = self.crypto.randomUUID();
         try {
-            console.debug('remote-luna subscribe', nonce, 'send', uri, param);
+            console.debug('remote-luna subscribe', nonce, 'send', uri);
             const subject = await this.commands.popen(device, command, 'utf-8');
             return new LunaSubscription<T>(subject, nonce);
         } catch (e) {
@@ -92,14 +92,18 @@ export class LunaSubscription<T> {
         this.subject = new ReplaySubject<T>();
         this.subscription = proc.pipe(map((v: CommandData<string>) => {
             if (v.fd === 0) {
-                return JSON.parse(v.data.trim());
+                try {
+                    return JSON.parse(v.data.trim());
+                } catch {
+                    throw new Error('Bad response from Luna');
+                }
             } else {
                 this.stderr += v.data;
                 return null;
             }
         }), filter(isNonNull)).subscribe({
             next: (value: T) => {
-                console.debug('remote-luna subscribe', this.nonce, 'response', value);
+                console.debug('remote-luna subscribe', this.nonce, 'response received');
                 this.subject.next(value);
             },
             error: (err) => {
@@ -138,8 +142,8 @@ export class LunaSubscription<T> {
                     timer = setTimeout(resolve, LUNA_CLEANUP_TIMEOUT_MS);
                 }),
             ]);
-        } catch (error) {
-            console.warn('Failed to interrupt Luna subscription', error);
+        } catch {
+            console.warn('Failed to interrupt Luna subscription');
         } finally {
             clearTimeout(timer);
             // CommandSubject.complete also unlistens the backend EventChannel.
