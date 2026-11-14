@@ -90,14 +90,14 @@ async fn valid_token<R: Runtime>(
         Err(e) => {
             return Err(Error::IO {
                 code: std::io::ErrorKind::InvalidData,
-                message: format!("Can\'t read dev mode token: {:?}", e),
+                message: format!("Can\'t read dev mode token: {}", e.utf8_error()),
                 unhandled: true,
             });
         }
     };
     let regex = Regex::new("^[0-9a-zA-Z]+$").unwrap();
     if !regex.is_match(&token) {
-        log::warn!("Token `{}` doesn't look like a valid DevMode token", token);
+        log::warn!("DevMode token has an invalid format");
         return Ok(None);
     }
     Ok(Some(token))

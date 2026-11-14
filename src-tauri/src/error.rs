@@ -104,7 +104,11 @@ impl From<serde_json::Error> for Error {
 }
 
 impl From<reqwest::Error> for Error {
-    fn from(value: reqwest::Error) -> Self {
+    fn from(mut value: reqwest::Error) -> Self {
+        if let Some(url) = value.url_mut() {
+            url.set_query(None);
+            url.set_fragment(None);
+        }
         if value.is_timeout() {
             return Error::Timeout;
         } else if value.is_connect() {
@@ -254,6 +258,37 @@ fn from_sftp_error_code(code: u32, message: String) -> Error {
             message,
             unhandled: false,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    #[tokio::test]
+    async fn http_errors_do_not_expose_query_secrets() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 4096];
+            stream.read(&mut request).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+        });
+        let response = reqwest::get(format!(
+            "http://{address}/check?sessionToken=secret-for-test"
+        ))
+        .await
+        .unwrap();
+        let error = Error::from(response.error_for_status().unwrap_err());
+        server.join().unwrap();
+        let message = error.to_string();
+        assert!(!message.contains("secret-for-test"));
+        assert!(message.contains("400"));
     }
 }
 
