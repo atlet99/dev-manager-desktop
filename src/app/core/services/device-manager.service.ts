@@ -167,6 +167,13 @@ export class DeviceManagerService extends BackendClient {
                     return this.legacyScreenshot(device, param);
                 }
                 throw e;
+            }).catch((e) => {
+                if (method === 'DISPLAY' && LunaResponseError.isCompatible(e)
+                    && e['errorCode'] === 'ERROR_07' && e['errorText'] === 'Cannot allocate memory') {
+                    return this.luna.call(device, 'luna://com.webos.surfacemanager/captureCompositorOutput',
+                        {output: tmpPath, format: 'PNG'}, false);
+                }
+                throw e;
             }));
         return tmpPath;
     }

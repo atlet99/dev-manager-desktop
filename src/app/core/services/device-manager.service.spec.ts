@@ -8,6 +8,7 @@ import {BackendError} from './backend-client';
 import {Device} from '../../types';
 import {backendError, mockBackend, resetBackend} from '../../../testing/tauri-mock';
 import {vi} from 'vitest';
+import {LunaResponseError, RemoteLunaService} from './remote-luna.service';
 
 describe('DeviceManagerService', () => {
     const device = <Device>{
@@ -25,6 +26,46 @@ describe('DeviceManagerService', () => {
         mockBackend({'device-manager/list': () => [device]});
         const service = TestBed.inject(DeviceManagerService);
         await expect(service.list()).resolves.toEqual([device]);
+    });
+
+    it.each([false, true])('uses compositor for the reported DISPLAY memory error (legacy: %s)', async legacy => {
+        mockBackend({});
+        const service = TestBed.inject(DeviceManagerService);
+        const luna = TestBed.inject(RemoteLunaService);
+        const memoryError = new LunaResponseError({returnValue: false, errorCode: 'ERROR_07', errorText: 'Cannot allocate memory'});
+        const call = vi.spyOn(luna, 'call').mockImplementation(async (_device, uri) => {
+            if (uri === 'luna://com.webos.service.capture/executeOneShot' && legacy) {
+                throw new LunaResponseError({returnValue: false, errorText: 'Service does not exist'});
+            }
+            if (uri.endsWith('/executeOneShot')) throw memoryError;
+            return {returnValue: true};
+        });
+        const path = await service.takeScreenshot(device);
+        expect(call).toHaveBeenLastCalledWith(device, 'luna://com.webos.surfacemanager/captureCompositorOutput',
+            {output: path, format: 'PNG'}, false);
+        call.mockRestore();
+    });
+
+    it('does not replace VIDEO capture with a compositor screenshot', async () => {
+        mockBackend({});
+        const service = TestBed.inject(DeviceManagerService);
+        const luna = TestBed.inject(RemoteLunaService);
+        const error = new LunaResponseError({returnValue: false, errorCode: 'ERROR_07', errorText: 'Cannot allocate memory'});
+        const call = vi.spyOn(luna, 'call').mockRejectedValue(error);
+        await expect(service.takeScreenshot(device, 'VIDEO')).rejects.toBe(error);
+        expect(call).toHaveBeenCalledTimes(1);
+        call.mockRestore();
+    });
+
+    it('preserves unrelated DISPLAY errors', async () => {
+        mockBackend({});
+        const service = TestBed.inject(DeviceManagerService);
+        const luna = TestBed.inject(RemoteLunaService);
+        const error = new LunaResponseError({returnValue: false, errorCode: 'ERROR_07', errorText: 'Permission denied'});
+        const call = vi.spyOn(luna, 'call').mockRejectedValue(error);
+        await expect(service.takeScreenshot(device)).rejects.toBe(error);
+        expect(call).toHaveBeenCalledTimes(1);
+        call.mockRestore();
     });
 
     it('does not log key material or passphrases during key retrieval', async () => {
