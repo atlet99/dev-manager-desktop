@@ -36,6 +36,24 @@ async fn token<R: Runtime>(app: AppHandle<R>, device: Device) -> Result<String, 
     Err(Error::Unsupported)
 }
 
+/// The LG server must answer promptly; without a deadline, a slow or unreachable
+/// endpoint leaves the Dev Mode section pending indefinitely.
+const SESSION_CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+async fn check_devmode_session(
+    url: &str,
+    timeout: std::time::Duration,
+) -> Result<DevModeSession, Error> {
+    let resp = reqwest::Client::builder()
+        .timeout(timeout)
+        .build()?
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(resp.json::<DevModeSession>().await?)
+}
+
 #[tauri::command]
 async fn status<R: Runtime>(app: AppHandle<R>, device: Device) -> Result<DevModeStatus, Error> {
     let Some(token) = valid_token(app, device).await? else {
@@ -44,16 +62,12 @@ async fn status<R: Runtime>(app: AppHandle<R>, device: Device) -> Result<DevMode
             remaining: None,
         });
     };
-    let resp = reqwest::get(
-        Url::parse_with_params(
-            "https://developer.lge.com/secure/CheckDevModeSession.dev",
-            &[("sessionToken", &token)],
-        )
-        .expect("Illegal HTTP URL"),
+    let url = Url::parse_with_params(
+        "https://developer.lge.com/secure/CheckDevModeSession.dev",
+        &[("sessionToken", &token)],
     )
-    .await?
-    .error_for_status()?;
-    let session = resp.json::<DevModeSession>().await?;
+    .expect("Illegal HTTP URL");
+    let session = check_devmode_session(url.as_str(), SESSION_CHECK_TIMEOUT).await?;
     if session.result == "success" {
         return Ok(DevModeStatus {
             token: Some(token),
@@ -142,6 +156,30 @@ mod tests {
     #[test]
     fn non_utf8_token_is_an_error() {
         assert!(parse_devmode_token(&[0xff, 0xfe]).is_err());
+    }
+
+    #[tokio::test]
+    async fn session_check_fails_fast_on_an_unresponsive_server() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let _ = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buffer = [0; 4096];
+                let _ = stream.read(&mut buffer);
+                std::thread::sleep(std::time::Duration::from_secs(30));
+                let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}");
+            }
+        });
+        let start = std::time::Instant::now();
+        let result = check_devmode_session(
+            &format!("http://{address}/check"),
+            std::time::Duration::from_secs(1),
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
     }
 }
 
