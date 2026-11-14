@@ -40,6 +40,7 @@ export class InfoComponent implements OnInit, OnDestroy {
     deviceSubscription!: Subscription;
     infoSubscription?: Subscription;
     private devModeGeneration = 0;
+    private homebrewGeneration = 0;
 
     constructor(
         private modalService: NgbModal,
@@ -54,18 +55,22 @@ export class InfoComponent implements OnInit, OnDestroy {
     ngOnInit(): void {
         this.deviceSubscription = this.deviceManager.selected$.subscribe((selected) => {
             this.devModeGeneration++;
+            this.homebrewGeneration++;
             this.infoSubscription?.unsubscribe();
             this.device = selected;
             this.deviceInfo = null;
             this.devModeInfo = null;
             this.homebrewAppInfo = null;
             this.homebrewAppConfig = null;
+            this.homebrewRepoManifest = undefined;
+            this.homebrewRepoHasUpdate = false;
             this.loadInfo();
         });
     }
 
     ngOnDestroy() {
         this.devModeGeneration++;
+        this.homebrewGeneration++;
         this.deviceSubscription.unsubscribe();
         this.infoSubscription?.unsubscribe();
     }
@@ -143,12 +148,19 @@ export class InfoComponent implements OnInit, OnDestroy {
     }
 
     private async loadHomebrewInfo(device: Device): Promise<void> {
-        this.homebrewAppInfo = await this.appManager.info(device, APP_ID_HBCHANNEL);
-        this.homebrewRepoManifest = await this.appsRepo.showApp(APP_ID_HBCHANNEL);
-        this.homebrewAppConfig = await this.deviceManager.getHbChannelConfig(device).catch(() => null);
-        if (this.homebrewRepoManifest && this.homebrewAppInfo) {
-            this.homebrewRepoHasUpdate = this.homebrewRepoManifest.manifest?.hasUpdate(this.homebrewAppInfo.version) === true;
-        }
+        if (this.device !== device) return;
+        const generation = ++this.homebrewGeneration;
+        const info = await this.appManager.info(device, APP_ID_HBCHANNEL);
+        if (generation !== this.homebrewGeneration || this.device !== device) return;
+        this.homebrewAppInfo = info;
+        this.homebrewRepoHasUpdate = false;
+        const manifest = await this.appsRepo.showApp(APP_ID_HBCHANNEL);
+        if (generation !== this.homebrewGeneration || this.device !== device) return;
+        this.homebrewRepoManifest = manifest;
+        const config = await this.deviceManager.getHbChannelConfig(device).catch(() => null);
+        if (generation !== this.homebrewGeneration || this.device !== device) return;
+        this.homebrewAppConfig = config;
+        this.homebrewRepoHasUpdate = !!(manifest && info && manifest.manifest?.hasUpdate(info.version));
     }
 
     async installHbChannel(): Promise<void> {
