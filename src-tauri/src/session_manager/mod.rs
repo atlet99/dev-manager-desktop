@@ -14,7 +14,7 @@ mod proc;
 #[derive(Default)]
 pub struct SessionManager {
     pub ssh_dir: DirSlot,
-    pools: Mutex<HashMap<String, DeviceConnectionPool>>,
+    pools: Mutex<HashMap<String, (serde_json::Value, DeviceConnectionPool)>>,
 }
 
 pub struct Proc {

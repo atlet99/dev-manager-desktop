@@ -12,6 +12,11 @@ use crate::device_manager::Device;
 use crate::error::Error;
 
 impl DeviceConnectionPool {
+    #[cfg(test)]
+    pub(crate) fn same_pool(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.last_error, &other.last_error)
+    }
+
     pub fn new(device: Device, ssh_dir: Option<PathBuf>) -> DeviceConnectionPool {
         let last_error = Arc::<Mutex<Option<Error>>>::default();
         let inner = Pool::<DeviceConnectionManager>::builder()

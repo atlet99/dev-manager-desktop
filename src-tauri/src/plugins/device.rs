@@ -2,6 +2,7 @@ use crate::app_dirs::{self, GetAppSshKeyDir};
 use crate::device_manager::privkey::PrivateKeyExt;
 use crate::device_manager::{Device, DeviceCheckConnection, DeviceManager, PrivateKeyInfo};
 use crate::error::Error;
+use crate::session_manager::SessionManager;
 use std::io::Read;
 use tauri::{
     plugin::{Builder, TauriPlugin},
@@ -24,17 +25,26 @@ async fn set_default(
 }
 
 #[tauri::command]
-async fn add(manager: State<'_, DeviceManager>, device: Device) -> Result<Device, Error> {
-    manager.add(&device).await
+async fn add(
+    manager: State<'_, DeviceManager>,
+    sessions: State<'_, SessionManager>,
+    device: Device,
+) -> Result<Device, Error> {
+    let saved = manager.add(&device).await?;
+    sessions.forget_device(&saved.name);
+    Ok(saved)
 }
 
 #[tauri::command]
 async fn remove(
     manager: State<'_, DeviceManager>,
+    sessions: State<'_, SessionManager>,
     name: String,
     remove_key: bool,
 ) -> Result<(), Error> {
-    manager.remove(&name, remove_key).await
+    manager.remove(&name, remove_key).await?;
+    sessions.forget_device(&name);
+    Ok(())
 }
 
 #[tauri::command]
