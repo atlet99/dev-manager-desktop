@@ -1,3 +1,7 @@
+export function escapeShellValue(value: string): string {
+    return String(value).replace(/'/g, "'\\''");
+}
+
 // language=shell
 export default `#!/bin/sh
 
@@ -41,10 +45,7 @@ trap 'exit 1' HUP INT TERM
 
 PRIV_KEY_FILE="\${TEMP_KEY_DIR}/webos_privkey_\${DEVICE_NAME}"
 
-if ! cat >"\${PRIV_KEY_FILE}" <<END_OF_PRIVKEY
-{{keyContent}}
-END_OF_PRIVKEY
-then
+if ! printf '%s\\n' '{{keyContent}}' >"\${PRIV_KEY_FILE}"; then
     echo "Unable to write temporary SSH private key" >&2
     exit 1
 fi

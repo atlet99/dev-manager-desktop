@@ -5,7 +5,7 @@ import {DeviceManagerService, DevModeStatus} from '../../core/services';
 import {noop} from 'rxjs';
 import {save as showSaveDialog} from '@tauri-apps/plugin-dialog'
 import {writeTextFile} from '@tauri-apps/plugin-fs';
-import renewScriptTemplate from './renew-script.sh';
+import renewScriptTemplate, {escapeShellValue} from './renew-script.sh';
 import Mustache from 'mustache';
 
 @Component({
@@ -33,7 +33,7 @@ export class RenewScriptComponent implements OnInit {
                 device: this.device,
                 keyContent: key.trim(),
             }, undefined, {
-                escape: (v) => v,
+                escape: escapeShellValue,
             });
         });
     }

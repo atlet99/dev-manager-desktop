@@ -9,7 +9,7 @@ import ts from 'typescript';
 
 // Apply the actual TypeScript template's string escapes without another loader.
 const source = readFileSync(new URL('../src/app/info/renew-script/renew-script.sh.ts', import.meta.url), 'utf8');
-const {default: template} = await import(`data:text/javascript,${encodeURIComponent(ts.transpile(source))}`);
+const {default: template, escapeShellValue} = await import(`data:text/javascript,${encodeURIComponent(ts.transpile(source))}`);
 
 describe('generated renewal script', {skip: process.platform === 'win32' ? 'Run in a POSIX shell (for example WSL)' : false}, () => {
     let root;
@@ -40,6 +40,7 @@ while [ "$#" -gt 0 ]; do
 done
 [ -f "$key" ] || exit 2
 case "$(ls -ld "$key")" in -rw-------*) ;; *) exit 2 ;; esac
+if [ -n "$TEST_EXPECT_KEY" ]; then [ "$(cat "$key")" = "$TEST_EXPECT_KEY" ] || exit 2; fi
 if [ "$TEST_REQUIRE_DECRYPTED_KEY" = 1 ]; then
     ssh-keygen -y -P '' -f "$key" >/dev/null 2>&1 || exit 2
 fi
@@ -70,7 +71,7 @@ printf '%s\\n' "$TEST_CURL_BODY"
         writeFileSync(script, Mustache.render(template, {
             device: {name: 'living room', host: 'tv.invalid', port: 9922, username: 'prisoner', passphrase: '', ...device},
             keyContent,
-        }, undefined, {escape: value => value}));
+        }, undefined, {escape: escapeShellValue}));
     }
 
     function cachePath() {
@@ -138,6 +139,21 @@ printf '%s\\n' "$TEST_CURL_BODY"
         const args = readFileSync(join(root, 'ssh.log'), 'utf8');
         assert.match(args, /(?:^| )-n(?: |$)/);
         assert.match(args, /BatchMode=yes/);
+    });
+
+    it('handles apostrophes in device values without executing them as shell code', () => {
+        render({name: "tv's room", passphrase: "key'phrase"});
+        assertRenewed(run());
+        render({passphrase: `'; touch "$TEST_ROOT/injected"; #`});
+        assertRenewed(run());
+        assert.equal(readdirSync(root).includes('injected'), false);
+    });
+
+    it('writes private-key contents without shell expansion', () => {
+        const key = 'literal-$(touch "$TEST_ROOT/injected")-`touch "$TEST_ROOT/injected"`';
+        render({}, key);
+        assertRenewed(run({TEST_EXPECT_KEY: key}));
+        assert.equal(readdirSync(root).includes('injected'), false);
     });
 
     it('propagates curl transport timeout status', () => {
