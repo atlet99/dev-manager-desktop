@@ -31,6 +31,7 @@ const APP_OPERATION_RESPONSE_TIMEOUT_MS = 10 * 60 * 1_000;
 export class AppManagerService {
 
     private packagesSubjects: Map<string, Subject<PackageInfo[] | null>>;
+    private packageLoads = new Map<string, object>();
 
     constructor(private luna: RemoteLunaService, private cmd: RemoteCommandService, private file: RemoteFileService,
                 private localFile: LocalFileService, private deviceManager: DeviceManagerService) {
@@ -43,14 +44,22 @@ export class AppManagerService {
 
     async load(device: Device): Promise<PackageInfo[]> {
         const subject = this.obtainSubject(device);
+        const request = {};
+        this.packageLoads.set(device.name, request);
         return this.list(device)
             .then(pkgs => {
-                subject.next(pkgs);
+                if (this.packageLoads.get(device.name) === request) {
+                    this.packageLoads.delete(device.name);
+                    subject.next(pkgs);
+                }
                 return pkgs;
             })
             .catch((error: any) => {
-                subject.error(error);
-                this.packagesSubjects.delete(device.name);
+                if (this.packageLoads.get(device.name) === request) {
+                    this.packageLoads.delete(device.name);
+                    this.packagesSubjects.delete(device.name);
+                    subject.error(error);
+                }
                 return [];
             });
     }

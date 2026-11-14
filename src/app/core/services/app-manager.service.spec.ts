@@ -13,6 +13,55 @@ import {APP_ID_HBCHANNEL} from '../../shared/constants';
 const device = {name: 'test-tv', host: '192.168.1.2', username: 'prisoner'} as Device;
 const idle = 10 * 60 * 1_000;
 
+describe('AppManagerService package loading', () => {
+    it('keeps the latest successful list when an older request fails', async () => {
+        const service = new AppManagerService({} as RemoteLunaService, {} as RemoteCommandService,
+            {} as RemoteFileService, {} as LocalFileService, {} as DeviceManagerService);
+        let rejectOld!: (reason: Error) => void;
+        let resolveNew!: (value: any[]) => void;
+        vi.spyOn(service, 'list')
+            .mockReturnValueOnce(new Promise((_, reject) => rejectOld = reject))
+            .mockReturnValueOnce(new Promise(resolve => resolveNew = resolve));
+        const values: unknown[] = [];
+        const errors: unknown[] = [];
+        const subscription = service.packages$(device).subscribe({
+            next: value => values.push(value), error: error => errors.push(error),
+        });
+        const old = service.load(device);
+        const current = service.load(device);
+        const packages = [{id: 'app.test'}] as any[];
+        resolveNew(packages);
+        await current;
+        rejectOld(new Error('TV was offline'));
+        await old;
+        expect(values.at(-1)).toEqual(packages);
+        expect(errors).toEqual([]);
+        subscription.unsubscribe();
+    });
+
+    it('ignores an older success and still reports the latest failure', async () => {
+        const service = new AppManagerService({} as RemoteLunaService, {} as RemoteCommandService,
+            {} as RemoteFileService, {} as LocalFileService, {} as DeviceManagerService);
+        let resolveOld!: (value: any[]) => void;
+        let rejectNew!: (reason: Error) => void;
+        vi.spyOn(service, 'list')
+            .mockReturnValueOnce(new Promise(resolve => resolveOld = resolve))
+            .mockReturnValueOnce(new Promise((_, reject) => rejectNew = reject));
+        const values: unknown[] = [];
+        const errors: unknown[] = [];
+        service.packages$(device).subscribe({next: value => values.push(value), error: error => errors.push(error)});
+        const old = service.load(device);
+        const current = service.load(device);
+        const failure = new Error('TV is offline');
+        rejectNew(failure);
+        await current;
+        resolveOld([{id: 'stale'}]);
+        await old;
+        expect(values).toEqual([null]);
+        expect(errors).toEqual([failure]);
+    });
+});
+
 describe('AppManagerService developer installation', () => {
     let proc: CommandSubject<string>;
     let luna: {subscribe: ReturnType<typeof vi.fn>};
