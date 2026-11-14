@@ -45,6 +45,7 @@ export class AppsComponent implements OnInit, OnDestroy {
         this.devices$ = this.deviceManager.devices$;
         this.deviceSubscription = this.deviceManager.selected$.subscribe((device) => {
             this.device = device;
+            this.instPackages = undefined;
             if (device) {
                 this.loadPackages();
             } else {
@@ -68,7 +69,7 @@ export class AppsComponent implements OnInit, OnDestroy {
         this.packages$ = this.appManager.packages$(device);
         this.packagesSubscription = this.packages$.subscribe({
             next: (pkgs) => {
-                if (pkgs?.length) {
+                if (pkgs) {
                     this.instPackages = keyBy(pkgs, (pkg) => pkg.id);
                 }
             }, error: noop
