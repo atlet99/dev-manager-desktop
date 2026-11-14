@@ -2,8 +2,9 @@ import {Component, Input, OnDestroy, ChangeDetectionStrategy} from '@angular/cor
 import {Device} from "../../types";
 import {finalize, from, Observable, Subscription} from "rxjs";
 import {ExecutionError, RemoteCommandService} from "../../core/services/remote-command.service";
-import {map} from "rxjs/operators";
+import {filter, map} from "rxjs/operators";
 import {trimEnd} from "lodash-es";
+import {isNonNull} from "../../shared/operators";
 import {readTextFileLines} from '@tauri-apps/plugin-fs'
 import {open as showOpenDialog} from '@tauri-apps/plugin-dialog'
 import {TokenizedSearchParserResult} from "../../shared/directives";
@@ -90,7 +91,8 @@ export class LsMonitorComponent implements OnDestroy {
         this.isCapture = true;
         this.isCapturing = true;
         this.messages = proc.pipe(
-            map(line => JSON.parse(line.data) as MonitorMessage),
+            map(line => parseMonitorMessage(line.data)),
+            filter(isNonNull),
             finalize(() => {
                 this.isCapturing = false;
                 proc.write();
@@ -107,7 +109,8 @@ export class LsMonitorComponent implements OnDestroy {
         }
         this.isCapture = false;
         this.messages = from(await readTextFileLines(selected)).pipe(
-            map(line => JSON.parse(line) as MonitorMessage)
+            map(parseMonitorMessage),
+            filter(isNonNull)
         );
         this.reload(this.messages);
     }
@@ -207,4 +210,13 @@ export class LsMonitorComponent implements OnDestroy {
         return true;
     }
 
+}
+
+/** Malformed lines (startup banners, partial output) must not kill the capture. */
+export function parseMonitorMessage(line: string): MonitorMessage | undefined {
+    try {
+        return JSON.parse(line) as MonitorMessage;
+    } catch {
+        return undefined;
+    }
 }
