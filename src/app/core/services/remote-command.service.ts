@@ -95,6 +95,7 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
             stdout: string = '';
             stderr: string = '';
             decoder = new TextDecoder();
+            stderrDecoder = new TextDecoder();
             interrupted = false;
 
             constructor(token: string) {
@@ -103,7 +104,7 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
 
             onReceive(payload: ProcData): void {
                 if (payload.fd !== 0) {
-                    this.stderr += Buffer.from(payload.data).toString('utf-8');
+                    this.stderr += this.stderrDecoder.decode(new Uint8Array(payload.data), {stream: true});
                     return;
                 }
                 if (encoding == 'utf-8') {
@@ -126,6 +127,7 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
 
             onClose(payload: SpawnResult): void {
                 console.log(this.token, 'closed', payload);
+                this.stderr += this.stderrDecoder.decode();
                 if (encoding === 'utf-8' && (!payload || (payload.type === 'Exit' && payload.status === 0))) {
                     this.stdout += this.decoder.decode();
                     if (this.stdout) {

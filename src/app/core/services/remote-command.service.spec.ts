@@ -43,4 +43,23 @@ describe('CommandSubject text output', () => {
         expect(failure.status).toBe(1);
         unlisten();
     });
+
+    it('preserves UTF-8 split across stderr packets in process errors', async () => {
+        mockBackend({});
+        const token = 'split-stderr';
+        let started!: () => void;
+        const ready = new Promise<void>(resolve => started = resolve);
+        const unlisten = await listen(`${token}:tx`, () => started());
+        const proc = new CommandSubject<string>({run: (fn: () => void) => fn()} as NgZone,
+            token, 'test', 'utf-8');
+        let failure: any;
+        proc.subscribe({error: error => failure = error});
+        await ready;
+        const bytes = new TextEncoder().encode('Ошибка');
+        await emit(`${token}:rx`, {fd: 1, data: [...bytes.slice(0, 1)]});
+        await emit(`${token}:rx`, {fd: 1, data: [...bytes.slice(1)]});
+        await emit(`${token}:closed`, {type: 'Exit', status: 1});
+        expect(failure.details).toBe('Ошибка');
+        unlisten();
+    });
 });
