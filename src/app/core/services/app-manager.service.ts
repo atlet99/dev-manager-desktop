@@ -277,7 +277,6 @@ export class AppManagerService {
                     return true;
                 }
                 progress?.(v['progress'], v['statusText']);
-                console.debug('install output', v);
                 return false;
             });
         } catch (e) {
@@ -330,7 +329,6 @@ function mapAppinstalldResponse(v: LunaResponse, expectResult: string | RegExp):
     } else if (resultValue.match(/^SUCCESS/i) || resultValue.match(expectResult)) {
         return true;
     }
-    console.debug('appinstalld output', v);
     return false;
 }
 
