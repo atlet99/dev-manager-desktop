@@ -22,21 +22,30 @@ export class InstalledComponent implements OnDestroy {
 
     private subscription?: Subscription;
     private installedField?: Observable<PackageInfo[] | null>;
+    private lookupGeneration = 0;
 
     constructor(@Host() public parent: AppsComponent, private appsRepo: AppsRepoService) {
     }
 
     @Input()
     set installed$(value: Observable<PackageInfo[] | null> | undefined) {
+        this.lookupGeneration++;
+        this.repoPackages = undefined;
+        this.installedError = undefined;
         this.subscription?.unsubscribe();
         this.subscription = value?.subscribe({
             next: (pkgs) => {
                 this.installedError = undefined;
 
                 const strings: string[] = pkgs?.map((pkg) => pkg.id) ?? [];
-                this.appsRepo.showApps(...strings).then(apps => this.repoPackages = apps);
+                const generation = ++this.lookupGeneration;
+                this.appsRepo.showApps(...strings).then(apps => {
+                    if (generation === this.lookupGeneration) this.repoPackages = apps;
+                });
             },
             error: (error) => {
+                this.lookupGeneration++;
+                this.repoPackages = undefined;
                 console.log('installed apps', error);
                 return this.installedError = error;
             }
@@ -49,6 +58,7 @@ export class InstalledComponent implements OnDestroy {
     }
 
     ngOnDestroy(): void {
+        this.lookupGeneration++;
         this.subscription?.unsubscribe();
     }
 
