@@ -1,6 +1,5 @@
 import {Directive, HostListener} from '@angular/core';
 import {open} from "@tauri-apps/plugin-shell";
-import {noop} from "rxjs";
 
 @Directive({
     selector: '[appExternalLink]',
@@ -15,7 +14,10 @@ export class ExternalLinkDirective {
             return false;
         }
         if (open && this.isLinkExternal(href)) {
-            open(href).then(noop);
+            open(href).catch(error => {
+                console.warn('Unable to open external link', error);
+                window.open(href, '_blank');
+            });
             return false;
         } else {
             window.open(href, '_blank');
