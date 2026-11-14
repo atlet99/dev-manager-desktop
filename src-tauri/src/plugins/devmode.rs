@@ -85,14 +85,19 @@ async fn valid_token<R: Runtime>(
     })
     .await
     .unwrap()?;
-    let token = match String::from_utf8(data) {
-        Ok(token) => token,
+    parse_devmode_token(&data)
+}
+
+/// The TV stores the token with a trailing newline; trim it before validating.
+fn parse_devmode_token(data: &[u8]) -> Result<Option<String>, Error> {
+    let token = match std::str::from_utf8(data) {
+        Ok(token) => token.trim().to_string(),
         Err(e) => {
             return Err(Error::IO {
                 code: std::io::ErrorKind::InvalidData,
-                message: format!("Can\'t read dev mode token: {}", e.utf8_error()),
+                message: format!("Can't read dev mode token: {}", e),
                 unhandled: true,
-            });
+            })
         }
     };
     let regex = Regex::new("^[0-9a-zA-Z]+$").unwrap();
@@ -101,6 +106,43 @@ async fn valid_token<R: Runtime>(
         return Ok(None);
     }
     Ok(Some(token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn token_with_trailing_newline_is_valid() {
+        assert_eq!(
+            parse_devmode_token(b"abc123Z\n").unwrap(),
+            Some("abc123Z".to_string())
+        );
+        assert_eq!(
+            parse_devmode_token(b"abc123Z\r\n").unwrap(),
+            Some("abc123Z".to_string())
+        );
+    }
+
+    #[test]
+    fn plain_token_is_valid() {
+        assert_eq!(
+            parse_devmode_token(b"abc123Z").unwrap(),
+            Some("abc123Z".to_string())
+        );
+    }
+
+    #[test]
+    fn token_with_bad_characters_is_rejected() {
+        for data in [&b"abc123Z!\n"[..], &b"abc 123Z\n"[..], &b""[..], &b"\n"[..]] {
+            assert_eq!(parse_devmode_token(data).unwrap(), None);
+        }
+    }
+
+    #[test]
+    fn non_utf8_token_is_an_error() {
+        assert!(parse_devmode_token(&[0xff, 0xfe]).is_err());
+    }
 }
 
 /// Initializes the plugin.
