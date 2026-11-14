@@ -95,7 +95,6 @@ export class RemoteShellService extends BackendClient {
       this.list().then(l => this.shellsSubject.next(l));
     }).then(noop);
     listen('shell-opened', (e: Event<ShellToken>) => {
-      console.log('shell-opened', this.shellSessions, e.payload);
       this.obtain(e.payload);
     }).then(noop);
   }

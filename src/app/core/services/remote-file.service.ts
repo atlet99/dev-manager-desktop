@@ -90,7 +90,6 @@ export class RemoteFileService extends BackendClient {
             }
 
             onClose(payload: any): void {
-                console.log('serve closed', payload);
                 if (payload) {
                     subject.error(BackendError.isCompatibleBody(payload) ? new BackendError(payload, call) : payload);
                 } else {

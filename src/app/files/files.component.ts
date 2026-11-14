@@ -86,7 +86,7 @@ export class FilesComponent implements OnInit, OnDestroy {
                 dir = await session.home();
             }
             yield new FilesState(dir);
-            console.log('ls', dir);
+
             let list = await session!.ls(dir);
             yield new FilesState(dir, list.sort(comparator), undefined);
         }
@@ -182,7 +182,6 @@ export class FilesComponent implements OnInit, OnDestroy {
         } while (result);
         progressRef.dismiss();
         if (!tempPath) return;
-        console.log(tempPath);
         await openPath(tempPath);
     }
 

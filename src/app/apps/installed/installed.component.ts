@@ -46,7 +46,7 @@ export class InstalledComponent implements OnDestroy {
             error: (error) => {
                 this.lookupGeneration++;
                 this.repoPackages = undefined;
-                console.log('installed apps', error);
+
                 return this.installedError = error;
             }
         });

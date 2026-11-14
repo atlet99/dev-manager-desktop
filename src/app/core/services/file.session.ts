@@ -40,12 +40,10 @@ export class FileSessionImpl implements FileSession {
     }
 
     put(localPath: string, remotePath: string, progress?: ProgressCallback): Promise<void> {
-        console.log('put', localPath, '=>', remotePath);
         return this.file.put(this.device, remotePath, localPath, progress);
     }
 
     mkdir(path: string): Promise<void> {
-        console.log('mkdir', path);
         return this.file.mkdir(this.device, path);
     }
 

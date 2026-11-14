@@ -68,16 +68,12 @@ export class HomeComponent implements OnInit {
             return;
         }
         event.preventDefault();
-        console.log('defaultDragEnter', event.type, transfer.items.length && transfer.items[0]);
     }
 
-    defaultDragLeave(event: DragEvent): void {
-        const dataTransfer = event.dataTransfer!;
-        console.log('defaultDragLeave', dataTransfer.items.length && dataTransfer.items[0]);
+    defaultDragLeave(_event: DragEvent): void {
     }
 
     defaultDrop(event: DragEvent): boolean {
-        console.log('defaultDrop', event);
         event.stopPropagation();
         event.preventDefault();
         return false;

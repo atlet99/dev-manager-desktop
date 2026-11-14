@@ -32,7 +32,6 @@ export abstract class EventChannel<RxPayload, ClosePayload> {
         if (!this.promise) {
             return;
         }
-        console.log('EventChannel', 'unlisten all');
         await this.promise?.then(list => list.forEach(f => f?.()));
         this.promise = undefined;
     }

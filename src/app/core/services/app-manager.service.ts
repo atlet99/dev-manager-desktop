@@ -91,7 +91,6 @@ export class AppManagerService {
         if (hasHbChannel) {
             const sha256 = await this.localFile.checksum(localPath, 'sha256');
             const serve: ServeInstance = await this.file.serveLocal(device, localPath);
-            console.log('Installing', serve.host);
             try {
                 await this.hbChannelInstall(device, new URL(serve.host).toString(), sha256, progress);
             } finally {

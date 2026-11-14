@@ -132,8 +132,7 @@ export class DeviceEditorComponent implements OnInit {
     async submit(): Promise<NewDevice> {
         const newDevice = await this.getNewDevice();
         try {
-            const info = await this.deviceManager.getDeviceInfo(newDevice);
-            console.log(info);
+            await this.deviceManager.getDeviceInfo(newDevice);
         } catch (e) {
             console.warn('Failed to get device info:', e);
             // Something wrong happened. Abort adding by default
