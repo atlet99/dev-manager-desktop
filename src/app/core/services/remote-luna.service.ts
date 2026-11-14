@@ -34,7 +34,7 @@ export class RemoteLunaService {
                 if (ExecutionError.isCompatible(e) && e.status == 127) {
                     throw new LunaUnsupportedError(`Failed to find command ${sendCmd}. Is this really a webOS device?`);
                 }
-                throw e;
+                throw safeLunaError(e);
             })
             .then(out => {
                 let typed: T;
@@ -74,9 +74,14 @@ export class RemoteLunaService {
             if (ExecutionError.isCompatible(e) && e.status == 127) {
                 throw new LunaUnsupportedError(`Failed to find command ${sendCmd}. Is this really a webOS device?`);
             }
-            throw e;
+            throw safeLunaError(e);
         }
     }
+}
+
+function safeLunaError(error: unknown): unknown {
+    if (!ExecutionError.isCompatible(error)) return error;
+    return new ExecutionError(`Luna command exited with status ${error.status}`, error.status, '', 'luna-send');
 }
 
 // Interrupt delivery and process exit share one best-effort cleanup budget.
@@ -110,7 +115,7 @@ export class LunaSubscription<T> {
                 if (ExecutionError.isCompatible(err) && err.status == 127) {
                     this.subject.error(new LunaUnsupportedError(`Failed to invoke luna-send command. Is this really a webOS device?`));
                 } else {
-                    this.subject.error(err);
+                    this.subject.error(safeLunaError(err));
                 }
             },
             complete: () => this.subject.complete(),

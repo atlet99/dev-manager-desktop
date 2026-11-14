@@ -1,8 +1,8 @@
 import {NgZone} from '@angular/core';
 import {ReplaySubject} from 'rxjs';
 import {vi} from 'vitest';
-import {CommandData, CommandSubject, RemoteCommandService} from './remote-command.service';
-import {LunaSubscription, RemoteLunaService} from './remote-luna.service';
+import {CommandData, CommandSubject, ExecutionError, RemoteCommandService} from './remote-command.service';
+import {LunaSubscription, LunaUnsupportedError, RemoteLunaService} from './remote-luna.service';
 import {Device} from '../../types';
 
 function command() {
@@ -12,6 +12,34 @@ function command() {
 }
 
 describe('RemoteLunaService diagnostics', () => {
+    it('keeps exit status but removes command and stderr from Luna errors', async () => {
+        const failure = new ExecutionError('command-secret', 1, 'stderr-secret', 'command-secret');
+        const proc = command();
+        const commands = {exec: vi.fn().mockRejectedValue(failure), popen: vi.fn().mockResolvedValue(proc)};
+        const service = new RemoteLunaService(commands as unknown as RemoteCommandService);
+        const device = {name: 'test'} as Device;
+        const callError = await service.call(device, 'luna://test').catch(e => e);
+        const subscription = await service.subscribe(device, 'luna://test');
+        let streamError: any;
+        subscription.asObservable().subscribe({error: error => streamError = error});
+        proc.error(failure);
+        for (const error of [callError, streamError]) {
+            expect(error).toBeInstanceOf(ExecutionError);
+            expect(error.status).toBe(1);
+            expect(JSON.stringify(error) + error.message).not.toMatch(/command-secret|stderr-secret/);
+        }
+        await subscription.unsubscribe();
+        commands.popen.mockRejectedValueOnce(failure);
+        const subscribeError = await service.subscribe(device, 'luna://test').catch(e => e);
+        expect(subscribeError.status).toBe(1);
+        expect(JSON.stringify(subscribeError) + subscribeError.message).not.toMatch(/command-secret|stderr-secret/);
+        commands.exec.mockRejectedValueOnce(new ExecutionError('missing', 127, '', 'luna-send'));
+        await expect(service.call(device, 'luna://test')).rejects.toBeInstanceOf(LunaUnsupportedError);
+        const connectionError = new Error('connection failed');
+        commands.exec.mockRejectedValueOnce(connectionError);
+        await expect(service.call(device, 'luna://test')).rejects.toBe(connectionError);
+    });
+
     it('does not expose request and response data in logs or malformed-response errors', async () => {
         const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
