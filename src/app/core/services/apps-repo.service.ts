@@ -182,14 +182,15 @@ export class PackageRequirements {
 
     checkIncompatibility(info: Partial<DeviceInfo>): IncompatibleReason[] | null {
         const result: IncompatibleReason [] = [];
-        if (info.osVersion && this.webosRelease) {
+        if (typeof info.osVersion === 'string' && typeof this.webosRelease === 'string') {
             if (!semver.satisfies(info.osVersion, this.webosRelease, true)) {
                 result.push('release');
             }
         }
-        if (info.socName && this.deviceSoC) {
-            const excludeSoCs = this.deviceSoC.filter(soc => soc.startsWith('!')).map(soc => soc.substring(1));
-            const includeSoCs = this.deviceSoC.filter(soc => !soc.startsWith('!'));
+        if (typeof info.socName === 'string' && Array.isArray(this.deviceSoC)) {
+            const deviceSoC = this.deviceSoC.filter((soc): soc is string => typeof soc === 'string');
+            const excludeSoCs = deviceSoC.filter(soc => soc.startsWith('!')).map(soc => soc.substring(1));
+            const includeSoCs = deviceSoC.filter(soc => !soc.startsWith('!'));
             if (includeSoCs.length > 0 && !includeSoCs.includes(info.socName)) {
                 result.push('soc');
             } else if (excludeSoCs.length > 0 && excludeSoCs.includes(info.socName)) {
