@@ -10,7 +10,6 @@ use crate::event_channel::{EventChannel, EventHandler};
 use crate::session_manager::SessionManager;
 use httparse::Status;
 use libssh_rs::Channel;
-use path_slash::PathBufExt;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_fs::{FilePath, Fs, OpenOptions};
@@ -144,6 +143,27 @@ fn read_request(reader: &mut impl Read) -> Result<(String, String), Error> {
     }
 }
 
+/// Join `url` beneath `base`, rejecting anything that escapes it. The serve
+/// endpoint answers the device, so a compromised peer must not read outside
+/// the file we expose.
+fn resolve_serve_path(base: &std::path::Path, url: &str) -> Option<PathBuf> {
+    if url == "/" {
+        return Some(base.to_path_buf());
+    }
+    let Some(relative) = url.strip_prefix('/') else {
+        return None; // the HTTP request target must be an absolute path
+    };
+    let mut candidate = base.to_path_buf();
+    for component in std::path::Path::new(relative).components() {
+        match component {
+            std::path::Component::Normal(part) => candidate.push(part),
+            std::path::Component::CurDir => {}
+            _ => return None,
+        }
+    }
+    Some(candidate)
+}
+
 fn serve_handler<R: Runtime>(fs: &Fs<R>, path: &FilePath, ch: Channel) -> Result<(), Error> {
     let (url, method) = read_request(&mut ch.stdout())?;
     let mut out = ch.stdin();
@@ -155,13 +175,15 @@ fn serve_handler<R: Runtime>(fs: &Fs<R>, path: &FilePath, ch: Channel) -> Result
         }
     }
     let mut path = path.clone();
-    if url != "/" {
-        let Ok(std_path) = path.into_path() else {
-            out.write_all(b"HTTP/1.1 404\r\n\r\nFile not found\n")?;
-            return Ok(());
-        };
-        path = FilePath::from(std_path.join(PathBuf::from_slash(&url[1..])));
-    }
+    let Some(std_path) = path
+        .into_path()
+        .ok()
+        .and_then(|base| resolve_serve_path(&base, &url))
+    else {
+        out.write_all(b"HTTP/1.1 404\r\n\r\nFile not found\n")?;
+        return Ok(());
+    };
+    path = FilePath::from(std_path);
     log::debug!("Serve {} => {:?}", url, path);
     let mut opt = OpenOptions::new();
     opt.read(true);
@@ -331,6 +353,27 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn serve_path_stays_within_the_served_root() {
+        let base = PathBuf::from("/srv/app");
+        for (url, expected) in [
+            ("/", Some(PathBuf::from("/srv/app"))),
+            ("/app.ipk", Some(PathBuf::from("/srv/app/app.ipk"))),
+            (
+                "/nested/app.ipk",
+                Some(PathBuf::from("/srv/app/nested/app.ipk")),
+            ),
+            ("/./app.ipk", Some(PathBuf::from("/srv/app/app.ipk"))),
+            ("/../etc/passwd", None),
+            ("/a/../../etc/passwd", None),
+            ("/etc/passwd", Some(PathBuf::from("/srv/app/etc/passwd"))),
+            ("/../", None),
+            ("//evil.com/app.ipk", None),
+        ] {
+            assert_eq!(resolve_serve_path(&base, url), expected, "url = {url}");
+        }
     }
 
     #[test]
