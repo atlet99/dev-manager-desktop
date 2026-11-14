@@ -95,6 +95,22 @@ impl SshContainer {
         panic!("Failed to start sshd container");
     }
 
+    /// Kill per-user SSH sessions without touching the listener.
+    pub fn disconnect_sessions(&self) {
+        let status = Command::new("docker")
+            .args([
+                "exec",
+                &self.container_id,
+                "pkill",
+                "-9",
+                "-f",
+                "sshd-session:",
+            ])
+            .status()
+            .expect("Failed to disconnect sshd test sessions");
+        assert!(status.success(), "Failed to disconnect sshd test sessions");
+    }
+
     /// The path of a fixture next to this file. `for_container` gives the form
     /// a `docker run -v` argument needs.
     ///

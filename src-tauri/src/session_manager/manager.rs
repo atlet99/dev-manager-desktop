@@ -16,7 +16,9 @@ impl SessionManager {
         F: Fn(&ManagedDeviceConnection) -> Result<T, Error>,
     {
         let pool = self.pool(device);
-        loop {
+        // Mirror the pool's own retry budget: a device that accepts TCP and then
+        // drops every session must not spin forever.
+        for _ in 0..3 {
             let session = pool.get()?;
             return match action(&session) {
                 Ok(ret) => {
@@ -29,6 +31,7 @@ impl SessionManager {
                 Err(e) => Err(e),
             };
         }
+        Err(Error::Disconnected)
     }
 
     pub fn spawn(&self, device: Device, command: &str) -> Proc {
@@ -77,6 +80,17 @@ impl SessionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::byte_string::Encoding;
+    use crate::conn_pool::ExecuteCommand;
+    use crate::tests::common::SshContainer;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn ssh_device(port: u16) -> Device {
+        serde_json::from_str(&format!(
+            "{{\"profile\":\"ose\",\"name\":\"tv\",\"host\":\"127.0.0.1\",\"port\":{port},\"username\":\"root\",\"password\":\"alpine\"}}"
+        ))
+        .unwrap()
+    }
 
     #[test]
     fn forgetting_a_device_discards_its_cached_pool() {
@@ -106,5 +120,35 @@ mod tests {
         assert!(!original.same_pool(&updated));
         assert!(updated.same_pool(&manager.pool(device)));
         assert_eq!(manager.pools.lock().unwrap()["tv"].0["host"], "127.0.0.2");
+    }
+
+    #[test]
+    fn with_session_bounds_disconnected_retries() {
+        let sshd = SshContainer::new();
+        let port = sshd.wait();
+        let device = ssh_device(port);
+        let calls = AtomicUsize::new(0);
+        let result: Result<(), Error> = SessionManager::default().with_session(device, |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Err(Error::Disconnected)
+        });
+        assert_eq!(result, Err(Error::Disconnected));
+        assert!(calls.load(Ordering::SeqCst) <= 3);
+    }
+
+    #[test]
+    fn with_session_recovers_after_ssh_session_drop() {
+        let sshd = SshContainer::new();
+        let port = sshd.wait();
+        let manager = SessionManager::default();
+        let device = ssh_device(port);
+        let run = || {
+            manager.with_session(device.clone(), |session| {
+                session.execute_command("printf connected", None, Encoding::String)
+            })
+        };
+        assert_eq!(run().unwrap().stdout.as_ref(), b"connected");
+        sshd.disconnect_sessions();
+        assert_eq!(run().unwrap().stdout.as_ref(), b"connected");
     }
 }
