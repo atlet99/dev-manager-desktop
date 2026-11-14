@@ -330,7 +330,6 @@ export class DeviceEditorComponent implements OnInit {
         if (os.type() == 'android') {
             const keyInfo = await this.deviceManager.verifyLocalPrivateKey(file, passphrase);
             const newFile = await this.deviceManager.sshKeyPath(`id_file_${keyInfo.sha1.replaceAll(':', '').substring(0, 8)}`);
-            console.log(keyInfo, newFile);
             await this.localFiles.copy(file, newFile).catch(e => console.error(e));
             file = newFile;
         }
