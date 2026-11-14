@@ -18,13 +18,17 @@ export class DeviceManagerService extends BackendClient {
 
     private devicesSubject: Subject<Device[] | null>;
     private selectedSubject: Subject<Device | null>;
+    private loadSequence = 0;
 
     constructor(zone: NgZone, private cmd: RemoteCommandService, private file: RemoteFileService,
                 private luna: RemoteLunaService) {
         super(zone, 'device-manager');
         this.devicesSubject = new BehaviorSubject<Device[] | null>(null);
         this.selectedSubject = new BehaviorSubject<Device | null>(null);
-        this.on('devicesUpdated', (devices: Device[]) => this.onDevicesUpdated(devices));
+        this.on('devicesUpdated', (devices: Device[]) => {
+            this.loadSequence++;
+            this.onDevicesUpdated(devices);
+        });
     }
 
     get devices$(): Observable<Device[] | null> {
@@ -37,7 +41,10 @@ export class DeviceManagerService extends BackendClient {
 
 
     load(): void {
-        this.list().then(devices => this.onDevicesUpdated(devices));
+        const sequence = ++this.loadSequence;
+        this.list().then(devices => {
+            if (sequence === this.loadSequence) this.onDevicesUpdated(devices);
+        }).catch(error => console.warn('Failed to load devices', error));
     }
 
     async list(): Promise<Device[]> {
@@ -55,7 +62,9 @@ export class DeviceManagerService extends BackendClient {
     }
 
     async addDevice(device: NewDevice): Promise<Device> {
-        return await this.invoke('add', {device});
+        const saved = await this.invoke<Device>('add', {device});
+        this.load();
+        return saved;
     }
 
     async readPrivKey(device: Device): Promise<string> {

@@ -7,6 +7,7 @@ import {DeviceManagerService} from './device-manager.service';
 import {BackendError} from './backend-client';
 import {Device} from '../../types';
 import {backendError, mockBackend, resetBackend} from '../../../testing/tauri-mock';
+import {vi} from 'vitest';
 
 describe('DeviceManagerService', () => {
     const device = <Device>{
@@ -24,6 +25,41 @@ describe('DeviceManagerService', () => {
         mockBackend({'device-manager/list': () => [device]});
         const service = TestBed.inject(DeviceManagerService);
         await expect(service.list()).resolves.toEqual([device]);
+    });
+
+    it('refreshes the selected device after saving changed connection settings', async () => {
+        const updated = {...device, host: '192.168.1.2'};
+        mockBackend({
+            'device-manager/add': () => updated,
+            'device-manager/list': () => [updated],
+        });
+        const service = TestBed.inject(DeviceManagerService);
+        const selected = firstValueFrom(service.selected$.pipe(filter(Boolean)));
+
+        await service.addDevice(updated as any);
+
+        await expect(selected).resolves.toEqual(updated);
+    });
+
+    it('does not let an older device list replace a newer selection', async () => {
+        mockBackend({});
+        const service = TestBed.inject(DeviceManagerService);
+        let resolveOld!: (devices: Device[]) => void;
+        let resolveNew!: (devices: Device[]) => void;
+        vi.spyOn(service, 'list')
+            .mockReturnValueOnce(new Promise(resolve => resolveOld = resolve))
+            .mockReturnValueOnce(new Promise(resolve => resolveNew = resolve));
+        let selected: Device | null = null;
+        const subscription = service.selected$.subscribe(value => selected = value);
+        service.load();
+        service.load();
+        const updated = {...device, host: '192.168.1.2'};
+        resolveNew([updated]);
+        await Promise.resolve();
+        resolveOld([device]);
+        await Promise.resolve();
+        expect(selected).toEqual(updated);
+        subscription.unsubscribe();
     });
 
     it('pushes devicesUpdated events into devices$', async () => {
