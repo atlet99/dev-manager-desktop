@@ -27,6 +27,19 @@ describe('DeviceManagerService', () => {
         await expect(service.list()).resolves.toEqual([device]);
     });
 
+    it('does not log key material or passphrases during key retrieval', async () => {
+        const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+        mockBackend({'device-manager/novacom_getkey': () => 'private-key-for-test'});
+        const service = TestBed.inject(DeviceManagerService);
+        try {
+            await service.novacomGetKey('tv.local', 'passphrase-for-test');
+            expect(JSON.stringify(debug.mock.calls)).not.toContain('passphrase-for-test');
+            expect(JSON.stringify(debug.mock.calls)).not.toContain('private-key-for-test');
+        } finally {
+            debug.mockRestore();
+        }
+    });
+
     it('refreshes the selected device after saving changed connection settings', async () => {
         const updated = {...device, host: '192.168.1.2'};
         mockBackend({

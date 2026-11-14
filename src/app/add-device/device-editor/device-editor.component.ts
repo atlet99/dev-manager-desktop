@@ -132,7 +132,6 @@ export class DeviceEditorComponent implements OnInit {
     async submit(): Promise<NewDevice> {
         const newDevice = await this.getNewDevice();
         try {
-            console.log(newDevice);
             const info = await this.deviceManager.getDeviceInfo(newDevice);
             console.log(info);
         } catch (e) {

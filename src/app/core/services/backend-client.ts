@@ -13,14 +13,14 @@ export abstract class BackendClient {
         return new Promise<T>((resolve, reject) => {
             const cmd = `plugin:${(this.category)}|${method}`;
             const call = `${this.category}/${method}`;
-            console.debug('invoke', call, args);
+            console.debug('invoke', call);
             invoke(cmd, args)
                 .then((result: unknown) => {
-                    console.debug('invoke', call, 'result', typeof result, result);
+                    console.debug('invoke', call, 'completed');
                     this.zone.run(() => resolve(result as any));
                 })
                 .catch((reason: unknown) => {
-                    console.warn('invoke', call, 'error', typeof reason, reason);
+                    console.warn('invoke', call, 'failed');
                     this.zone.run(() => {
                         if (typeof reason === 'string' && reason.startsWith('{')) {
                             try {
