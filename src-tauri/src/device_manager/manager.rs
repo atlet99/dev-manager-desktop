@@ -1,15 +1,10 @@
-
 use crate::device_manager::privkey::PrivateKeyExt;
-use crate::device_manager::{
-    Device, DeviceCheckConnection, DeviceManager, PrivateKey, PrivateKeyInfo,
-};
+use crate::device_manager::{Device, DeviceManager, PrivateKey, PrivateKeyInfo};
 use crate::error::Error;
 use ares_connection_lib::setup::{fetch_key, NOVACOM_KEY_PORT};
 use ares_device_lib::DeviceManager as SharedDeviceManager;
 use libssh_rs::{PublicKeyHashType, SshKey};
-use port_check::is_port_reachable_with_timeout;
 use std::io::{Error as IoError, ErrorKind};
-use std::time::Duration;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
@@ -36,9 +31,7 @@ impl DeviceManager {
     }
 
     pub async fn list(&self) -> Result<Vec<Device>, Error> {
-        let devices = self.with_shared(|shared| shared.list()).await?;
-        *self.devices.lock().unwrap() = devices.clone();
-        Ok(devices)
+        self.with_shared(|shared| shared.list()).await
     }
 
     pub async fn find(&self, name: &str) -> Result<Option<Device>, Error> {
@@ -125,19 +118,4 @@ impl DeviceManager {
             }),
         }
     }
-
-    pub async fn check_connection(&self, host: &str) -> Result<DeviceCheckConnection, Error> {
-        Ok(DeviceCheckConnection {
-            ssh_22: is_port_reachable_with_timeout(format!("{host}:22"), Duration::from_secs(10)),
-            ssh_9922: is_port_reachable_with_timeout(
-                format!("{host}:9922"),
-                Duration::from_secs(10),
-            ),
-            key_server: is_port_reachable_with_timeout(
-                format!("{host}:9991"),
-                Duration::from_secs(10),
-            ),
-        })
-    }
 }
-

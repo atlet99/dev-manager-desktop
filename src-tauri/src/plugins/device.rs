@@ -1,6 +1,6 @@
 use crate::app_dirs::{self, GetAppSshKeyDir};
 use crate::device_manager::privkey::PrivateKeyExt;
-use crate::device_manager::{Device, DeviceCheckConnection, DeviceManager, PrivateKeyInfo};
+use crate::device_manager::{Device, DeviceManager, PrivateKeyInfo};
 use crate::error::Error;
 use crate::session_manager::SessionManager;
 use std::io::Read;
@@ -88,14 +88,6 @@ async fn privkey_read<R: Runtime>(app: AppHandle<R>, device: Device) -> Result<S
 }
 
 #[tauri::command]
-async fn check_connection(
-    manager: State<'_, DeviceManager>,
-    host: String,
-) -> Result<DeviceCheckConnection, Error> {
-    manager.check_connection(&host).await
-}
-
-#[tauri::command]
 async fn app_ssh_key_path<R: Runtime>(app: AppHandle<R>) -> Result<String, Error> {
     Ok(app.ensure_app_ssh_key_path()?.to_string_lossy().to_string())
 }
@@ -121,7 +113,6 @@ pub fn plugin<R: Runtime>(name: &'static str) -> TauriPlugin<R> {
             novacom_getkey,
             localkey_verify,
             privkey_read,
-            check_connection,
             app_ssh_key_path,
             app_ssh_pubkey,
             ssh_key_dir,

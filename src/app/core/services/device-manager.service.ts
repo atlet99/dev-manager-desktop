@@ -79,10 +79,6 @@ export class DeviceManagerService extends BackendClient {
         return await this.invoke('localkey_verify', {path, passphrase});
     }
 
-    async checkConnection(host: string): Promise<DeviceCheckConnection> {
-        return await this.invoke('check_connection', {host});
-    }
-
     async listCrashReports(device: Device): Promise<CrashReport[]> {
         const dirs = [
             '/tmp/faultmanager/crash/',
@@ -296,11 +292,6 @@ export interface DeviceInfo {
     socName?: string;
 }
 
-export declare interface DeviceCheckConnection {
-    keyServer: boolean;
-    ssh22?: string;
-    ssh9922?: string;
-}
 
 export declare interface PrivateKeyInfo {
     sha1: string;
