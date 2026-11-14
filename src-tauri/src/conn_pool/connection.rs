@@ -50,7 +50,6 @@ impl DeviceConnection {
             .lock()
             .expect("Failed to lock DeviceConnection::last_ok") = true;
     }
-
 }
 
 impl SshConnection for DeviceConnection {
@@ -152,6 +151,36 @@ impl DeviceConnectionUserInfo {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_id_output() {
+        let info = DeviceConnectionUserInfo::parse(
+            "uid=0(root) gid=0(root) groups=0(root),27(sudo),100(watch)",
+        )
+        .unwrap();
+        assert_eq!(info.uid.id, 0);
+        assert_eq!(info.uid.name.as_deref(), Some("root"));
+        assert_eq!(info.gid.id, 0);
+        assert_eq!(info.groups.len(), 3);
+        assert_eq!(info.groups[1].name.as_deref(), Some("sudo"));
+    }
+
+    #[test]
+    fn rejects_overflowing_uid_instead_of_panicking() {
+        assert!(Id::parse("4294967296").is_none());
+        assert!(DeviceConnectionUserInfo::parse("uid=4294967296 gid=0").is_none());
+    }
+
+    #[test]
+    fn requires_uid_and_gid() {
+        assert!(DeviceConnectionUserInfo::parse("uid=0").is_none());
+        assert!(DeviceConnectionUserInfo::parse("").is_none());
+    }
+}
+
 impl Debug for Id {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(name) = &self.name {
@@ -169,7 +198,7 @@ impl Id {
             return None;
         };
         Some(Self {
-            id: u32::from_str_radix(caps.get(1).unwrap().as_str(), 10).unwrap(),
+            id: u32::from_str_radix(caps.get(1)?.as_str(), 10).ok()?,
             name: caps.get(2).map(|s| {
                 s.as_str()
                     .trim_matches(|c| c == '(' || c == ')')

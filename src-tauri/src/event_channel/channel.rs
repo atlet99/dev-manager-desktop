@@ -55,7 +55,9 @@ where
     where
         D: Serialize + Clone,
     {
-        self.app.emit(&self.topic(suffix), data).unwrap();
+        // Losing the message is recoverable (the UI just stops seeing this stream);
+        // a panic inside the SSH task is not.
+        let _ = self.app.emit(&self.topic(suffix), data);
     }
 
     pub fn new<S>(app: AppHandle<R>, category: S) -> EventChannel<R, H>

@@ -14,7 +14,7 @@ impl From<&Metadata> for FileItem {
 impl FileItem {
     pub(crate) fn new(stat: &Metadata, link: Option<LinkInfo>, access: Option<PermInfo>) -> Self {
         FileItem {
-            filename: String::from(stat.name().unwrap()),
+            filename: stat.name().unwrap_or("unknown").to_string(),
             r#type: format!(
                 "{}",
                 abbrev_type(stat.file_type().unwrap_or(FileType::Unknown))
@@ -23,12 +23,7 @@ impl FileItem {
             user: stat.owner().map(|s| String::from(s)),
             group: stat.group().map(|s| String::from(s)),
             size: stat.len().unwrap_or(0) as usize,
-            mtime: stat
-                .modified()
-                .unwrap_or(UNIX_EPOCH)
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs_f64(),
+            mtime: mtime_secs(stat.modified()),
             link,
             access,
         }
@@ -69,6 +64,13 @@ impl PermInfo {
     }
 }
 
+fn mtime_secs(modified: Option<std::time::SystemTime>) -> f64 {
+    modified
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
 fn abbrev_type(value: FileType) -> char {
     match value {
         FileType::Special => 'b',
@@ -76,5 +78,31 @@ fn abbrev_type(value: FileType) -> char {
         FileType::Regular => '-',
         FileType::Symlink => 'l',
         FileType::Unknown => ' ',
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn mtime_before_unix_epoch_does_not_panic() {
+        assert_eq!(
+            mtime_secs(Some(SystemTime::UNIX_EPOCH - Duration::from_secs(60))),
+            0.0
+        );
+        assert_eq!(mtime_secs(None), 0.0);
+        assert_eq!(mtime_secs(Some(SystemTime::UNIX_EPOCH)), 0.0);
+    }
+
+    #[test]
+    fn mtime_reports_seconds_since_epoch() {
+        assert_eq!(
+            mtime_secs(Some(
+                SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000)
+            )),
+            1_600_000_000.0
+        );
     }
 }
