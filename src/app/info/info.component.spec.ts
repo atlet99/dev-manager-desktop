@@ -7,6 +7,48 @@ import {Device} from '../types';
 import {BehaviorSubject} from 'rxjs';
 
 describe('InfoComponent device changes', () => {
+    it('loads device info after a failed connection is retried', async () => {
+        const selected$ = new BehaviorSubject<Device | null>({name: 'tv'} as Device);
+        const getDeviceInfo = vi.fn().mockRejectedValueOnce(new Error('offline'))
+            .mockResolvedValueOnce({modelName: 'online'});
+        const component = new InfoComponent({} as NgbModal,
+            {selected$, getDeviceInfo, getHbChannelConfig: vi.fn().mockResolvedValue(null)} as unknown as DeviceManagerService,
+            {} as RemoteFileService, {info: vi.fn().mockResolvedValue(null)} as unknown as AppManagerService,
+            {showApp: vi.fn().mockResolvedValue(null)} as unknown as AppsRepoService, {} as DevModeService);
+        component.ngOnInit();
+        await Promise.resolve();
+        expect(component.infoError?.message).toBe('offline');
+        component.loadInfo();
+        await Promise.resolve();
+        expect(component.infoError).toBeNull();
+        expect(component.deviceInfo?.modelName).toBe('online');
+        component.ngOnDestroy();
+    });
+
+    it('does not display stale details after a retry fails', async () => {
+        let resolveStatus!: (status: DevModeStatus) => void;
+        const device = {name: 'tv', username: 'prisoner'} as Device;
+        const selected$ = new BehaviorSubject<Device | null>(device);
+        const getDeviceInfo = vi.fn().mockResolvedValueOnce({modelName: 'old'})
+            .mockRejectedValueOnce(new Error('offline'));
+        const component = new InfoComponent({} as NgbModal,
+            {selected$, getDeviceInfo, getHbChannelConfig: vi.fn().mockResolvedValue(null)} as unknown as DeviceManagerService,
+            {} as RemoteFileService, {info: vi.fn().mockResolvedValue(null)} as unknown as AppManagerService,
+            {showApp: vi.fn().mockResolvedValue(null)} as unknown as AppsRepoService,
+            {status: vi.fn(() => new Promise(resolve => resolveStatus = resolve))} as unknown as DevModeService);
+        component.ngOnInit();
+        await Promise.resolve();
+        expect(component.deviceInfo?.modelName).toBe('old');
+        component.loadInfo();
+        await Promise.resolve();
+        resolveStatus({remaining: 'stale'});
+        await Promise.resolve();
+        expect(component.infoError?.message).toBe('offline');
+        expect(component.deviceInfo).toBeNull();
+        expect(component.devModeInfo).toBeNull();
+        component.ngOnDestroy();
+    });
+
     it('keeps Homebrew data for the currently selected device', async () => {
         let resolveFirst!: (value: any) => void;
         let resolveSecond!: (value: any) => void;

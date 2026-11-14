@@ -54,16 +54,7 @@ export class InfoComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         this.deviceSubscription = this.deviceManager.selected$.subscribe((selected) => {
-            this.devModeGeneration++;
-            this.homebrewGeneration++;
-            this.infoSubscription?.unsubscribe();
             this.device = selected;
-            this.deviceInfo = null;
-            this.devModeInfo = null;
-            this.homebrewAppInfo = null;
-            this.homebrewAppConfig = null;
-            this.homebrewRepoManifest = undefined;
-            this.homebrewRepoHasUpdate = false;
             this.loadInfo();
         });
     }
@@ -76,10 +67,18 @@ export class InfoComponent implements OnInit, OnDestroy {
     }
 
     loadInfo(): void {
+        this.devModeGeneration++;
+        this.homebrewGeneration++;
+        this.infoSubscription?.unsubscribe();
+        this.infoError = null;
+        this.deviceInfo = null;
+        this.devModeInfo = null;
+        this.homebrewAppInfo = null;
+        this.homebrewAppConfig = null;
+        this.homebrewRepoManifest = undefined;
+        this.homebrewRepoHasUpdate = false;
         const device = this.device;
         if (!device) return;
-        this.infoError = null;
-        this.infoSubscription?.unsubscribe();
         this.infoSubscription = fromPromise(this.deviceManager.getDeviceInfo(device)).subscribe({
             next: (info) => {
                 this.deviceInfo = info;
