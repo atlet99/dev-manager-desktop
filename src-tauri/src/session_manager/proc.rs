@@ -87,7 +87,7 @@ impl Proc {
         while !channel.is_closed() && !channel.is_eof() {
             if self.interrupted.lock().unwrap().eq(&true) {
                 channel.send_eof()?;
-                log::info!("interrupting {}", &self.command);
+                log::info!("interrupting {self:?}");
                 channel.request_send_signal("TERM")?;
                 channel.close()?;
                 interrupted = true;
@@ -147,9 +147,25 @@ impl Proc {
 
 impl Debug for Proc {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "Proc {{ command={}, device.name={} }}",
-            self.command, self.device.name
-        ))
+        f.write_fmt(format_args!("Proc {{ device.name={} }}", self.device.name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::device_manager::Device;
+
+    #[test]
+    fn debug_does_not_include_command_arguments() {
+        let device: Device = serde_json::from_str(
+            r#"{"profile":"ose","name":"tv","host":"127.0.0.1","port":22,"username":"root"}"#,
+        )
+        .unwrap();
+        let proc =
+            SessionManager::default().spawn(device, "luna-send '{\"token\":\"test-secret\"}'");
+        let debug = format!("{proc:?}");
+        assert!(debug.contains("tv"));
+        assert!(!debug.contains("test-secret"));
     }
 }
