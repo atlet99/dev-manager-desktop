@@ -94,6 +94,7 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
         this.channel = new class extends EventChannel<ProcData, SpawnResult> {
             stdout: string = '';
             stderr: string = '';
+            decoder = new TextDecoder();
             interrupted = false;
 
             constructor(token: string) {
@@ -106,7 +107,7 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
                     return;
                 }
                 if (encoding == 'utf-8') {
-                    this.stdout = `${this.stdout}${Buffer.from(payload.data).toString('utf-8')}`;
+                    this.stdout += this.decoder.decode(new Uint8Array(payload.data), {stream: true});
                     let index: number;
                     while ((index = this.stdout.indexOf('\n')) >= 0) {
                         zone.run(() => subject.next({
@@ -125,6 +126,13 @@ export class CommandSubject<T = Buffer | string> extends ReplaySubject<CommandDa
 
             onClose(payload: SpawnResult): void {
                 console.log(this.token, 'closed', payload);
+                if (encoding === 'utf-8' && (!payload || (payload.type === 'Exit' && payload.status === 0))) {
+                    this.stdout += this.decoder.decode();
+                    if (this.stdout) {
+                        zone.run(() => subject.next({fd: 0, data: this.stdout as any}));
+                        this.stdout = '';
+                    }
+                }
                 if (!payload) {
                     zone.run(() => subject.complete());
                 } else if (payload.type === 'Exit') {
