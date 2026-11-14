@@ -259,7 +259,11 @@ export class DeviceEditorComponent implements OnInit {
         }
         return fromPromise(this.deviceManager.list()
             .then(devices => devices.find(device => device.name === name && (!this.name || device.name !== this.name)))
-            .then(device => device ? {nameExists: true} : null));
+            .then(device => device ? {nameExists: true} : null)
+            .catch(e => {
+                console.error('Unable to validate device name', e);
+                return {nameCheckFailed: true};
+            }));
     }
 
     private async validateAuthInfo(auth: SetupAuthInfoUnion): Promise<null | ValidationErrors> {
@@ -279,7 +283,7 @@ export class DeviceEditorComponent implements OnInit {
                             return {[e.reason]: true};
                         }
                         console.error(e);
-                        throw e;
+                        return {ValidationFailed: true};
                     });
             case NewDeviceAuthentication.AppKey:
                 return this.deviceManager.getAppSshPubKey().then(() => null).catch(e => {
@@ -287,7 +291,7 @@ export class DeviceEditorComponent implements OnInit {
                         return {[e.reason]: true};
                     }
                     console.error(e);
-                    throw e;
+                    return {ValidationFailed: true};
                 });
             case NewDeviceAuthentication.DevKey:
                 return auth.value ? null : {PassphraseRequired: true};

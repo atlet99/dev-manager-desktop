@@ -6,8 +6,12 @@
       @let nameErrors = formGroup.controls.name.errors;
       @if (nameErrors) {
         @if (nameErrors['nameExists']) {
-          <div class="invalid-feedback">
+          <div class="invalid-feedback d-block">
             Device with this name already exists
+          </div>
+        } @else if (nameErrors['nameCheckFailed']) {
+          <div class="invalid-feedback d-block">
+            Unable to check the name; please try again
           </div>
         }
       }
@@ -64,7 +68,7 @@
 
       @let sshAuthErrors = formGroup.controls.sshAuth.errors;
       @if (sshAuthErrors) {
-        <div class="invalid-feedback">
+        <div class="invalid-feedback d-block">
           @if (sshAuthErrors['UnsupportedKey']) {
             Unsupported private key.
           } @else if (sshAuthErrors['IO']) {
@@ -75,6 +79,8 @@
             Wrong passphrase
           } @else if (sshAuthErrors['PassphraseRequired']) {
             Please input passphrase
+          } @else if (sshAuthErrors['ValidationFailed']) {
+            Unable to verify these details; please try again
           }
         </div>
       }
