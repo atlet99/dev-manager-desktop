@@ -64,6 +64,20 @@ impl SshContainer {
                 .output()
                 .expect("Failed to query sshd container health");
             if String::from_utf8_lossy(&health_status.stdout).contains("\"healthy\"") {
+                let setup = Command::new("docker")
+                    .args([
+                        "exec",
+                        &self.container_id,
+                        "bash",
+                        "/etc/entrypoint.d/setpasswd.sh",
+                    ])
+                    .output()
+                    .expect("Failed to set sshd test password");
+                assert!(
+                    setup.status.success(),
+                    "Failed to set sshd test password: {}",
+                    String::from_utf8_lossy(&setup.stderr)
+                );
                 let output = Command::new("docker")
                     .args(["port", &self.container_id, "22/tcp"])
                     .output()

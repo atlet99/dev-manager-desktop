@@ -60,21 +60,22 @@ mod test {
 
     #[test]
     fn execute_command_timeout() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (done, wait) = std::sync::mpsc::channel::<()>();
+        let server = std::thread::spawn(move || {
+            let (_stream, _) = listener.accept().unwrap();
+            let _ = wait.recv_timeout(std::time::Duration::from_secs(30));
+        });
         // language=json
-        let device = serde_json::from_str::<Device>(
-            r#"
-{
-  "profile": "ose",
-  "name": "test",
-  "host": "0.0.0.0",
-  "port": 22,
-  "username": "root",
-  "password": "12345678"
-}
-"#,
-        )
+        let device = serde_json::from_str::<Device>(&format!(
+            "{{\"profile\":\"ose\",\"name\":\"test\",\"host\":\"127.0.0.1\",\
+            \"port\": {port},\"username\": \"root\"}}"
+        ))
         .unwrap();
         let conn = DeviceConnection::new(device, None);
+        let _ = done.send(());
+        server.join().unwrap();
         assert_eq!(Error::Timeout, conn.unwrap_err())
     }
 
