@@ -50,6 +50,14 @@ async function requestJson(url: string): Promise<any> {
     }
 }
 
+function safeURL(value: string, base: string): string | undefined {
+    try {
+        return new URL(value, base).toString();
+    } catch {
+        return undefined;
+    }
+}
+
 function validatePage(data: any): asserts data is RepositoryPage {
     const paging = data?.paging;
     if (!data || Array.isArray(data) || !paging ||
@@ -157,7 +165,7 @@ export class RepositoryItem {
             this.requirements = new PackageRequirements(data.requirements);
         }
         if (data.fullDescriptionUrl) {
-            this.fullDescriptionUrl = new URL(data.fullDescriptionUrl, url).toString();
+            this.fullDescriptionUrl = safeURL(data.fullDescriptionUrl, url);
         }
     }
 
@@ -214,6 +222,13 @@ export class RepositoryPage {
 
     constructor(data: Partial<RepositoryPage>, url: string) {
         this.paging = data.paging!;
-        this.packages = data.packages?.map((item) => new RepositoryItem(item, url)) ?? [];
+        this.packages = (data.packages ?? []).map((item) => {
+            try {
+                return new RepositoryItem(item, url);
+            } catch {
+                console.warn('Skipping a malformed package in the repository page');
+                return null;
+            }
+        }).filter((item): item is RepositoryItem => item !== null);
     }
 }
