@@ -22,10 +22,10 @@ export class ExecutionError extends Error {
     }
 
     static fromBackendError(e: BackendErrorBody): ExecutionError {
-        const stderr = e['stderr'] as number[];
+        const stderr = Array.isArray(e['stderr']) ? e['stderr'] as number[] : [];
         const data = convertOutput(stderr, 'utf-8');
-        const exitCode = e['exit_code'] as number;
-        const command = e['command'] as string;
+        const exitCode = typeof e['exit_code'] === 'number' ? e['exit_code'] as number : -1;
+        const command = typeof e['command'] === 'string' ? e['command'] as string : 'command';
         return new ExecutionError(`Command \`${command}\` exited with code ${exitCode}`, exitCode, data, command);
     }
 }
