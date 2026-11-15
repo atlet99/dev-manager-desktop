@@ -3,6 +3,7 @@ import {Device} from "../../../types";
 import {PrefLogLevel, RemoteLogService} from "../../../core/services/remote-log.service";
 import {NgbActiveModal, NgbModal} from "@ng-bootstrap/ng-bootstrap";
 import {SetContextComponent} from "../set-context/set-context.component";
+import {MessageDialogComponent} from "../../../shared/components/message-dialog/message-dialog.component";
 
 @Component({
     selector: 'app-pmlog-control',
@@ -28,13 +29,26 @@ export class PmLogControlComponent {
     }
 
     async changeAllLogLevel(level: PrefLogLevel) {
-        const changed = await this.log.pmLogSetLevel(this.device, '*', level);
-        this.reflectChanges(changed, level);
+        try {
+            const changed = await this.log.pmLogSetLevel(this.device, '*', level);
+            this.reflectChanges(changed, level);
+        } catch (e) {
+            MessageDialogComponent.open(this.modals, {
+                title: 'Failed to change log levels',
+                message: String(e),
+                positive: 'Dismiss',
+            });
+        }
     }
 
     async changeLogLevel(context: string, value: string) {
         this.log.pmLogSetLevel(this.device, context, value as PrefLogLevel)
-            .then(changed => this.reflectChanges(changed, value as PrefLogLevel));
+            .then(changed => this.reflectChanges(changed, value as PrefLogLevel))
+            .catch(e => MessageDialogComponent.open(this.modals, {
+                title: 'Failed to change log level',
+                message: String(e),
+                positive: 'Dismiss',
+            }));
     }
 
     async showSetLevel() {
@@ -42,8 +56,16 @@ export class PmLogControlComponent {
         if (!result) {
             return;
         }
-        const changed = await this.log.pmLogSetLevel(this.device, result.context, result.level);
-        this.reflectChanges(changed, result.level);
+        try {
+            const changed = await this.log.pmLogSetLevel(this.device, result.context, result.level);
+            this.reflectChanges(changed, result.level);
+        } catch (e) {
+            MessageDialogComponent.open(this.modals, {
+                title: 'Failed to change log level',
+                message: String(e),
+                positive: 'Dismiss',
+            });
+        }
     }
 
     private reflectChanges(changed: string[], level: PrefLogLevel) {

@@ -72,5 +72,13 @@ export class CrashesComponent {
         }
         await this.files.rm(report.device, report.path, false)
             .then(() => this.reports && remove(this.reports, r => r.path === report.path))
+            .catch(e => {
+                console.error('Failed to delete crash report', e);
+                MessageDialogComponent.open(this.modals, {
+                    title: 'Failed to delete crash report',
+                    message: String(e),
+                    positive: 'Dismiss',
+                });
+            });
     }
 }
