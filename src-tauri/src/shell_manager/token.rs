@@ -43,14 +43,36 @@ impl<'de> Visitor<'de> for ShellTokenVisitor {
     // parse the version from the string
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where
-        E: std::error::Error,
+        E: serde::de::Error,
     {
-        Ok(ShellToken(Uuid::from_str(value).unwrap()))
+        let uuid = Uuid::from_str(value).map_err(E::custom)?;
+        Ok(ShellToken(uuid))
     }
 }
 
 impl Display for ShellToken {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_token_roundtrips_through_serde() {
+        let token = ShellToken::new();
+        let json = serde_json::to_string(&token).unwrap();
+        let parsed: ShellToken = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.0, token.0);
+    }
+
+    #[test]
+    fn shell_token_rejects_invalid_uuids() {
+        for bad in ["", "not-a-uuid", "1234", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"] {
+            let result: Result<ShellToken, _> = serde_json::from_value(serde_json::json!(bad));
+            assert!(result.is_err(), "expected error for {bad:?}");
+        }
     }
 }
