@@ -3,6 +3,7 @@ import {DeviceConnectionMode} from "../mode-select/mode-select.component";
 import {Device, NewDeviceAuthentication} from "../../../types";
 import {DeviceEditorComponent, SetupAuthInfoUnion} from "../../device-editor/device-editor.component";
 import {ProgressDialogComponent} from "../../../shared/components/progress-dialog/progress-dialog.component";
+import {MessageDialogComponent} from "../../../shared/components/message-dialog/message-dialog.component";
 import {NgbModal} from "@ng-bootstrap/ng-bootstrap";
 import {DeviceManagerService} from "../../../core/services";
 
@@ -54,7 +55,16 @@ export class AddDeviceComponent implements OnInit {
         const progress = ProgressDialogComponent.open(this.modals);
         try {
             const newDevice = await this.deviceEditor.submit();
-            this.deviceAdded.emit(await this.deviceManager.addDevice(newDevice));
+            try {
+                this.deviceAdded.emit(await this.deviceManager.addDevice(newDevice));
+            } catch (e) {
+                console.error('Failed to add device', e);
+                MessageDialogComponent.open(this.modals, {
+                    title: 'Failed to add device',
+                    message: String(e),
+                    positive: 'Dismiss',
+                });
+            }
         } finally {
             progress.close();
         }

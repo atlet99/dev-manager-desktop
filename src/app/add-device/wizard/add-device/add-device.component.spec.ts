@@ -7,6 +7,7 @@ import {AddDeviceModule} from '../../add-device.module';
 import {DeviceConnectionMode} from '../mode-select/mode-select.component';
 import {CommandHandler, mockBackend} from '../../../../testing/tauri-mock';
 import {NewDeviceAuthentication} from '../../../types';
+import {MessageDialogComponent} from '../../../shared/components/message-dialog/message-dialog.component';
 
 
 describe('AddDeviceComponent addresses', () => {
@@ -120,5 +121,59 @@ describe('AddDeviceComponent addresses', () => {
         expect(savedDevice).toMatchObject({name: 'rooted-tv', username: 'root', host: 'tv.local'});
         expect(savedDevice).not.toHaveProperty('password');
         expect(savedDevice).not.toHaveProperty('privateKey');
+    });
+});
+
+describe('AddDeviceComponent save failures', () => {
+    let fixture: ComponentFixture<AddDeviceComponent>;
+    let add: Mock<CommandHandler>;
+    let dialogOpen: ReturnType<typeof vi.spyOn>;
+
+    const openDialog = () => vi.spyOn(MessageDialogComponent, 'open').mockReturnValue({} as any);
+
+    beforeEach(async () => {
+        add = vi.fn<CommandHandler>(() => {
+            throw {reason: 'Message', message: 'network unreachable', unhandled: true};
+        });
+        mockBackend({
+            'device-manager/app_ssh_pubkey': () => 'ssh-ed25519 test',
+            'device-manager/list': () => [],
+            'device-manager/novacom_getkey': () => 'test-private-key',
+            'remote-command/exec': () => ({stdout: JSON.stringify({returnValue: true, modelName: 'test-tv', firmwareVersion: '1.0', sdkVersion: '6.0', otaId: 'test'}), stderr: ''}),
+            'device-manager/add': add,
+        });
+        await TestBed.configureTestingModule({
+            imports: [AddDeviceModule],
+            providers: [{provide: NgbModal, useValue: {open: () => ({close: vi.fn()})}}],
+        }).compileComponents();
+        fixture = TestBed.createComponent(AddDeviceComponent);
+        fixture.componentRef.setInput('mode', DeviceConnectionMode.DevMode);
+        fixture.detectChanges();
+        fixture.componentInstance.deviceEditor.formGroup.controls.sshAuth.controls.value.setValue('TEST123');
+        fixture.componentInstance.deviceEditor.formGroup.controls.address.setValue('tv.local');
+        await fixture.whenStable();
+    });
+
+    afterEach(() => {
+        dialogOpen?.mockRestore();
+    });
+
+    it('shows a visible error when saving the device fails', async () => {
+        dialogOpen = openDialog();
+        await fixture.componentInstance.submit();
+        expect(add).toHaveBeenCalled();
+        expect(dialogOpen).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+            title: expect.stringMatching(/add/i),
+        }));
+    });
+
+    it('does not show an error when the save succeeds', async () => {
+        add.mockImplementation(({device}) => device);
+        dialogOpen = openDialog();
+        const added = vi.fn();
+        fixture.componentInstance.deviceAdded.subscribe(added);
+        await fixture.componentInstance.submit();
+        expect(dialogOpen).not.toHaveBeenCalled();
+        expect(added).toHaveBeenCalled();
     });
 });
