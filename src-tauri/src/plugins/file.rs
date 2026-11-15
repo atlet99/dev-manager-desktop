@@ -173,7 +173,14 @@ async fn put<R: Runtime>(
                 message: format!("Failed to open local file {source} for uploading: {e:?}"),
                 unhandled: true,
             })?;
-            let total = file.metadata().unwrap().len() as usize;
+            let total = file
+                .metadata()
+                .map_err(|e| Error::IO {
+                    code: e.kind(),
+                    message: format!("Failed to read source file {source} metadata: {e:?}"),
+                    unhandled: true,
+                })?
+                .len() as usize;
             // The shared FileTransfer streams the file over an exec channel when
             // the device has no SFTP.
             session.put(&mut file, &path, |copied| {
