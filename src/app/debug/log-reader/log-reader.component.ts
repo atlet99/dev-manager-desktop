@@ -102,7 +102,13 @@ export class LogReaderComponent implements OnInit, OnDestroy, AfterViewInit {
         this.sourceSubscription = undefined;
         this.term.clear();
         if (source) {
-            this.sourceSubscription = source.subscribe(message => this.writeLog(message));
+            this.sourceSubscription = source.subscribe({
+                next: message => this.writeLog(message),
+                error: e => {
+                    console.error('Log stream failed', e);
+                    this.term.writeln(chalk.red(`Log stream failed: ${String(e)}`));
+                }
+            });
         }
     }
 
