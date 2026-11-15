@@ -1,4 +1,6 @@
 import {Component, EventEmitter, Input, Output, ChangeDetectionStrategy} from '@angular/core';
+import {NgbModal} from '@ng-bootstrap/ng-bootstrap';
+import {MessageDialogComponent} from '../../shared/components/message-dialog/message-dialog.component';
 import {AppPrivKeyName, Device, NewDevice, NewDeviceAuthentication} from "../../types";
 import {
     DeviceEditorComponent,
@@ -28,6 +30,9 @@ export class InlineEditorComponent {
     @Output()
     closed: EventEmitter<void> = new EventEmitter();
 
+    constructor(private modals: NgbModal) {
+    }
+
     get deviceAuth(): SetupAuthInfoUnion {
         if (this.device.password) {
             return {type: NewDeviceAuthentication.Password, value: this.device.password};
@@ -51,7 +56,16 @@ export class InlineEditorComponent {
         }
     }
 
-    doSave(editor: DeviceEditorComponent) {
-        editor.submit().then(dev => this.save.emit(dev));
+    async doSave(editor: DeviceEditorComponent) {
+        try {
+            const dev = await editor.submit();
+            this.save.emit(dev);
+        } catch (e) {
+            MessageDialogComponent.open(this.modals, {
+                title: 'Unable to save device',
+                message: String(e),
+                positive: 'Dismiss',
+            });
+        }
     }
 }

@@ -1,8 +1,8 @@
 import {Component, Inject, OnInit, ChangeDetectionStrategy} from '@angular/core';
-import {NgbActiveModal} from '@ng-bootstrap/ng-bootstrap';
+import {NgbActiveModal, NgbModal} from '@ng-bootstrap/ng-bootstrap';
 import {Device} from '../../types';
+import {MessageDialogComponent} from '../../shared/components/message-dialog/message-dialog.component';
 import {DeviceManagerService, DevModeStatus} from '../../core/services';
-import {noop} from 'rxjs';
 import {save as showSaveDialog} from '@tauri-apps/plugin-dialog'
 import {writeTextFile} from '@tauri-apps/plugin-fs';
 import renewScriptTemplate, {escapeShellValue, renewCacheName} from './renew-script.sh';
@@ -22,6 +22,7 @@ export class RenewScriptComponent implements OnInit {
     constructor(
         public modal: NgbActiveModal,
         private deviceManager: DeviceManagerService,
+        private modals: NgbModal,
         @Inject('device') public device: Device,
         @Inject('devMode') public devMode: DevModeStatus,
     ) {
@@ -35,6 +36,13 @@ export class RenewScriptComponent implements OnInit {
                 keyContent: key.trim(),
             }, undefined, {
                 escape: escapeShellValue,
+            });
+        }).catch(e => {
+            console.error('Failed to read the app private key', e);
+            MessageDialogComponent.open(this.modals, {
+                title: 'Failed to prepare the renewal script',
+                message: String(e),
+                positive: 'Dismiss',
             });
         });
     }
@@ -51,6 +59,13 @@ export class RenewScriptComponent implements OnInit {
                 return;
             }
             return writeTextFile(value, content);
-        }).catch(noop);
+        }).catch(e => {
+            console.error('Failed to save the renewal script', e);
+            MessageDialogComponent.open(this.modals, {
+                title: 'Failed to save the script',
+                message: String(e),
+                positive: 'Dismiss',
+            });
+        });
     }
 }
