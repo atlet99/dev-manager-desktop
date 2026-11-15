@@ -1,6 +1,6 @@
 import {Component, NgZone, OnDestroy, OnInit, QueryList, ViewChildren, ViewEncapsulation, ChangeDetectionStrategy} from '@angular/core';
 import {DeviceManagerService} from '../core/services';
-import {firstValueFrom, noop, Subscription} from "rxjs";
+import {firstValueFrom, noop} from "rxjs";
 import {Device} from "../types";
 import {filter} from "rxjs/operators";
 import {isNonNull} from "../shared/operators";
@@ -57,8 +57,6 @@ export class TerminalComponent implements OnInit, OnDestroy {
 
     public termSize?: ITerminalDimensions;
 
-    private subscription?: Subscription;
-
     @ViewChildren('terminal')
     public terminals?: QueryList<ITerminalComponent>;
 
@@ -77,7 +75,7 @@ export class TerminalComponent implements OnInit, OnDestroy {
                 this.currentShell = shells[0].token;
                 return;
             }
-        });
+        }).catch(e => console.warn('Failed to list shells', e));
         this.unlistenFns.push(await listen('shell-info', (event: Event<ShellInfo>) =>
             this.zone.run(() => this.updateTab(event.payload))));
         this.unlistenFns.push(await listen('shell-removed', (event: Event<ShellToken>) =>
@@ -85,7 +83,6 @@ export class TerminalComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy(): void {
-        this.subscription?.unsubscribe();
         for (let unlistenFn of this.unlistenFns) {
             unlistenFn();
         }

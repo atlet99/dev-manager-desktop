@@ -11,7 +11,12 @@ export class UpdateService {
         return fetch('https://api.github.com/repos/webosbrew/dev-manager-desktop/releases/latest', {
             headers: {'accept': 'application/vnd.github.v3+json'},
 
-        }).then(async res => new ReleaseImpl(await res.json()));
+        }).then(async res => {
+            if (!res.ok) {
+                throw new Error(`Failed to fetch the latest release (HTTP ${res.status})`);
+            }
+            return new ReleaseImpl(await res.json());
+        });
     }
 
     get ignoreUntil(): SemVer | null {
