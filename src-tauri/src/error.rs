@@ -274,7 +274,7 @@ mod tests {
         let server = std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = [0; 4096];
-            stream.read(&mut request).unwrap();
+            let _ = stream.read(&mut request);
             stream
                 .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
                 .unwrap();
