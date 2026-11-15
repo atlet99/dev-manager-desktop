@@ -8,6 +8,12 @@ use std::io::{Error as IoError, ErrorKind};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
+/// webOS serves the key with the line endings of whatever the TV has; OpenSSH
+/// on strict platforms rejects anything but LF, so normalize here.
+fn normalize_privkey(content: &str) -> String {
+    content.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 impl DeviceManager {
     /// The shared manager, pointed at this app's own directories.
     fn shared(&self) -> Result<SharedDeviceManager, Error> {
@@ -91,6 +97,7 @@ impl DeviceManager {
                     _ => e.into(),
                 })?;
 
+        let content = normalize_privkey(&content);
         match SshKey::from_privkey_base64(&content, Some(passphrase)) {
             Ok(_) => Ok(content),
             _ => Err(if passphrase.is_empty() {
@@ -106,7 +113,8 @@ impl DeviceManager {
         content: &str,
         passphrase: &str,
     ) -> Result<PrivateKeyInfo, Error> {
-        match SshKey::from_privkey_base64(content, Some(passphrase)) {
+        let content = normalize_privkey(content);
+        match SshKey::from_privkey_base64(&content, Some(passphrase)) {
             Ok(key) => Ok(PrivateKeyInfo {
                 sha1: key.get_public_key_hash_hexa(PublicKeyHashType::Sha1)?,
                 sha256: key.get_public_key_hash_hexa(PublicKeyHashType::Sha256)?,
@@ -117,5 +125,31 @@ impl DeviceManager {
                 Error::BadPassphrase
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_privkey_converts_crlf_to_lf() {
+        let input = "-----BEGIN OPENSSH PRIVATE KEY-----\r\nAAAA\r\nBBBB\r\n-----END OPENSSH PRIVATE KEY-----\n";
+        assert_eq!(
+            normalize_privkey(input),
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\nBBBB\n-----END OPENSSH PRIVATE KEY-----\n"
+        );
+    }
+
+    #[test]
+    fn normalize_privkey_strips_bare_carriage_returns() {
+        assert_eq!(normalize_privkey("a\rb"), "a\nb");
+    }
+
+    #[test]
+    fn normalize_privkey_leaves_lf_content_alone() {
+        let input =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n";
+        assert_eq!(normalize_privkey(input), input);
     }
 }
