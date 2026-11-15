@@ -60,7 +60,7 @@ impl DeviceManager {
             let name = key.name(device.valid_passphrase())?;
             let key_path = self.ssh_dir.ensure()?.join(&name);
             let mut file = File::create(key_path).await?;
-            file.write(data.as_bytes()).await?;
+            file.write_all(data.as_bytes()).await?;
             device.private_key = Some(PrivateKey::Name { name });
         }
         log::info!("Save device {}", device.name);

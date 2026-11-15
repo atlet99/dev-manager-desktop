@@ -196,11 +196,11 @@ fn serve_handler<R: Runtime>(fs: &Fs<R>, path: &FilePath, ch: Channel) -> Result
     };
     let meta = file.metadata()?;
     let file_len = meta.len();
-    out.write(b"HTTP/1.1 200\r\n")?;
-    out.write(b"Content-Type: application/octet-stream\r\n")?;
-    out.write(format!("Content-Length: {}\r\n", file_len).as_bytes())?;
+    out.write_all(b"HTTP/1.1 200\r\n")?;
+    out.write_all(b"Content-Type: application/octet-stream\r\n")?;
+    out.write_all(format!("Content-Length: {}\r\n", file_len).as_bytes())?;
     if &method == "GET" {
-        out.write(b"\r\n")?;
+        out.write_all(b"\r\n")?;
         copy(&mut file, &mut out)?;
     }
     Ok(())
